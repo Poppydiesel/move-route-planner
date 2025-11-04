@@ -58,21 +58,26 @@
       justify-content:center; color:#fff; font:bold 12px system-ui;
     }
 
-    /* Watermark using Move Motorcycles Blue logo */
-    .watermark {
-      position: fixed; inset: 0; z-index: 200; pointer-events: none;
-      background-image: url('Move Motorcycles Blue.png');
-      background-repeat: repeat;
-      background-size: 220px auto;
-      opacity: 0.25;
-      transform: rotate(-25deg);
-      transform-origin: center center;
-    }
+    /* Proper watermark layering for Move Motorcycles style */
+.leaflet-tile-pane::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url('Move Motorcycles Blue.png');
+  background-repeat: repeat;
+  background-size: 220px auto;
+  opacity: 0.25;
+  transform: rotate(-25deg);
+  transform-origin: center center;
+  pointer-events: none;
+  z-index: 2; /* sits above tiles but below vectors */
+}
+
+    
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="watermark" aria-hidden="true"></div>
 
   <div class="bottom-bar">
     <div class="status-chips" id="statusChips"></div>

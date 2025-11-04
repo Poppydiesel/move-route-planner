@@ -75,12 +75,18 @@
   const map = L.map('map').setView([52.8, -1.6], 6);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
 
-  // --- Add Move Motorcycles watermark (correct layer position) ---
-  const watermark = L.DomUtil.create('div', 'move-watermark', map.getPanes().overlayPane);
+  // --- Move Motorcycles watermark (robust version) ---
+function addWatermark() {
+  const overlayPane = map.getPanes().overlayPane;
+  // Remove any existing watermark
+  const existing = overlayPane.querySelector('.move-watermark');
+  if (existing) overlayPane.removeChild(existing);
+
+  const watermark = L.DomUtil.create('div', 'move-watermark', overlayPane);
   Object.assign(watermark.style, {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundImage: "url('Move Motorcycles Blue.png')",
+    backgroundImage: "url('Move%20Motorcycles%20Blue.png')",
     backgroundRepeat: 'repeat',
     backgroundSize: '220px auto',
     opacity: 0.25,
@@ -89,11 +95,9 @@
     pointerEvents: 'none',
     zIndex: 2
   });
-  // Keep watermark fixed relative to map when moving
-  map.on('move zoom', () => {
-    const p = map.latLngToLayerPoint(map.getBounds().getNorthWest());
-    watermark.style.transformOrigin = `${p.x}px ${p.y}px`;
-  });
+}
+map.whenReady(addWatermark);
+map.on('layeradd', addWatermark);
 
   // --- Marker cluster layer ---
   const markers = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnEveryZoom:true });

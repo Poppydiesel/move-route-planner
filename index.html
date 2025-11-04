@@ -3,223 +3,69 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Move Motorcycles – Daily Route Planner</title>
+  <title>Move Motorcycles – Job Status Map</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <!-- Routing -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
-  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 
   <!-- Marker Clustering -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-  <!-- Robust CSV parser for quoted addresses -->
+  <!-- PapaParse for CSV -->
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 
-  <!-- Export -->
-  <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
-
   <style>
-    :root{ --navy:#040C34; --gold:#A08C59; --toolbar-bottom:70px; }
-    html,body{height:100%;margin:0}
-    #map{height:100%}
-
-    /* Toolbar */
-    .toolbar{
-      position:fixed; z-index:1000; top:10px; left:50%; transform:translateX(-50%);
-      background:#fff; border:1px solid #e5e7eb; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.12);
-      display:flex; gap:8px; align-items:center; padding:8px 10px; font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      flex-wrap:wrap; max-width:min(1200px, 96vw)
+    html, body, #map { height: 100%; margin: 0; }
+    :root { --navy:#040C34; --gold:#A08C59; }
+    .toolbar {
+      position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+      background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      padding: 6px 10px; z-index: 1000; display: flex; gap: 8px; flex-wrap: wrap;
+      font-family: system-ui, sans-serif;
     }
-    .toolbar select,.toolbar button,.toolbar input[type="time"], .toolbar input[type="date"], .toolbar input[type="text"]{
-      height:36px; border-radius:10px; border:1px solid #e5e7eb; padding:0 10px; font-weight:600
-    }
-    .toolbar button{ background:var(--gold); color:#111; border:none; cursor:pointer }
-    .toolbar button.secondary{ background:#fff; color:#111; border:1px solid #d1d5db }
-    .toolbar label{ font-size:12px; color:#374151; margin-right:4px }
-    .toolbar .divider{width:1px; height:24px; background:#e5e7eb; margin:0 6px; border-radius:1px}
-
-    /* Status checkbox group */
-    .status-group{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:6px 8px; border:1px dashed #e5e7eb; border-radius:10px; background:#fafafa; }
-    .status-group label{ display:flex; align-items:center; gap:6px; font-size:12px; padding:2px 6px; border-radius:999px; border:1px solid #e5e7eb; background:#fff; }
-    .dot{ width:10px; height:10px; border-radius:50%; display:inline-block }
-
-    /* Right panel sits under toolbar */
-    .panel{
-      position:fixed; right:10px; top:calc(var(--toolbar-bottom) + 10px); bottom:10px; width:420px;
-      background:#fff; border:1px solid #e5e7eb; border-radius:16px;
-      box-shadow:0 8px 24px rgba(0,0,0,.12); z-index:900; overflow:auto;
-      font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    }
-    .panel h3{ margin:14px 14px 6px; font-size:16px; color:var(--navy) }
-    .panel .routeCard{ margin:10px 12px; padding:10px; border:1px solid #e5e7eb; border-radius:12px }
-    .panel .routeCard header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-weight:700; gap:6px }
-    .panel .meta{ font-size:12px; color:#374151 }
-    .panel .jobs{ list-style:none; margin:8px 0 0; padding:0; min-height:12px }
-    .panel .jobs li{ display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px dashed #e5e7eb; border-radius:10px; margin-bottom:6px; background:#fafafa; justify-content:space-between }
-    .panel .jobs li[draggable="true"]{ cursor:grab }
-    .panel .jobs.dragover{ outline:2px dashed var(--gold); background:#fff }
-    .badge{ font-size:11px; padding:2px 6px; border-radius:999px; border:1px solid #e5e7eb; background:#f9fafb }
-    .lite{ font-size:12px; color:#6b7280 }
-    .chip.dot{ width:12px; height:12px; border-radius:999px; display:inline-block; vertical-align:middle; margin-right:6px; border:1px solid rgba(0,0,0,.12) }
-    .mm-pin{ width:20px; height:20px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.2); display:flex; align-items:center; justify-content:center; font:bold 11px/1 system-ui; color:#fff }
-
-    /* Watermark */
-    .watermark{
-      position:fixed; inset:0; pointer-events:none; z-index:200; opacity:.25;
-      background-image:repeating-linear-gradient(-30deg,rgba(4,12,52,.08) 0,rgba(4,12,52,.08) 2px,transparent 2px,transparent 140px),
-                       repeating-linear-gradient(-30deg,transparent 0,transparent 140px,rgba(4,12,52,.08) 140px,rgba(4,12,52,.08) 142px)
-    }
-    .watermark::before{
-      content:"MOVE MOTORCYCLES MOVE MOTORCYCLES MOVE MOTORCYCLES";
-      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-      font-weight:900; letter-spacing:.4em; font-size:40px; color:#040C34; opacity:.12; transform:rotate(-20deg)
-    }
-
-    .leaflet-routing-container{ display:none }
-    .leaflet-routing-line{ stroke:#040C34!important; stroke-width:3px!important }
-
-    @media (max-width: 900px){
-      .panel{ width: min(420px, 96vw); right: 4px; }
-    }
+    .toolbar button { background: var(--gold); color: #111; border: none; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+    .status-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .status-filters label { font-size: 12px; display: flex; align-items: center; gap: 4px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .mm-pin { width:22px; height:22px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.2); display:flex; align-items:center; justify-content:center; color:#fff; font:bold 12px system-ui; }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="watermark" aria-hidden="true"></div>
-
-  <!-- Toolbar -->
-  <div class="toolbar" id="toolbar">
-    <label for="day">Date:</label>
-    <input id="day" type="date" />
-    <div class="divider"></div>
-
-    <label for="start">Start:</label>
-    <input id="start" type="time" value="08:00" />
-    <div class="divider"></div>
-
-    <label for="depotPc">Depot:</label>
-    <input id="depotPc" value="OX447RW" />
-
-    <button id="importJsonBtn" class="secondary">Import JSON</button>
-    <button id="importCsvBtn" class="secondary">Import CSV</button>
-    <input id="csvUpload" type="file" accept=".csv" style="display:none" />
-
-    <button id="exportBtn">Export day (GeoJSON)</button>
-
-    <!-- Status checkboxes -->
-    <div class="divider"></div>
-    <div class="status-group" id="statusGroup">
-      <label><input type="checkbox" data-status="all" checked>All</label>
-      <label><span class="dot" style="background:#de3323"></span><input type="checkbox" data-status="Pick up Request" checked>Pick up</label>
-      <label><span class="dot" style="background:#2e22f4"></span><input type="checkbox" data-status="Booking received" checked>Booking</label>
-      <label><span class="dot" style="background:#ecd0a7"></span><input type="checkbox" data-status="Driver assigned for collection" checked>Assigned (C)</label>
-      <label><span class="dot" style="background:#eaa83d"></span><input type="checkbox" data-status="Collected" checked>Collected</label>
-      <label><span class="dot" style="background:#ecd0a7"></span><input type="checkbox" data-status="Driver assigned for delivery" checked>Assigned (D)</label>
-      <label><span class="dot" style="background:#38651d"></span><input type="checkbox" data-status="Delivered" checked>Delivered</label>
-    </div>
+  <div class="toolbar">
+    <button id="importCsvBtn">Import CSV</button>
+    <input id="csvUpload" type="file" accept=".csv" style="display:none">
+    <div class="status-filters" id="statusFilters"></div>
   </div>
-
-  <!-- Drivers / Depot panel -->
-  <aside class="panel" id="panel"></aside>
 
 <script>
 (function(){
-  // ----- Drivers
-  const drivers = [
-    { id:"mark",  name:"Mark",  color:'#1f77b4', homePostcode:'WS137JY' },
-    { id:"keith", name:"Keith", color:'#ff7f0e', homePostcode:'RG45BZ' },
-    { id:"jason", name:"Jason", color:'#2ca02c', homePostcode:'OX107NP' },
-    { id:"phil",  name:"Phil",  color:'#d62728', homePostcode:'HP143TB' },
-    { id:"tony",  name:"Tony",  color:'#9467bd', homePostcode:'MK184LQ' },
-    { id:"mike",  name:"Mike",  color:'#8c564b', homePostcode:'CM50LL' },
-    { id:"andy",  name:"Andy",  color:'#e377c2', homePostcode:'HP143QF' },
-    { id:"spare", name:"Spare", color:'#7f7f7f', homePostcode:'OX447RW' },
-  ];
+  const map = L.map('map').setView([52.8, -1.6], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
-  // Status colours
+  const markers = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnEveryZoom:true });
+  map.addLayer(markers);
+
   const statusColours = {
     'Pick up Request': '#de3323',
     'Booking received': '#2e22f4',
-    'Driver assigned for delivery': '#ecd0a7',
-    'Collected': '#eaa83d',
-    'Delivered': '#38651d',
     'Driver assigned for collection': '#ecd0a7',
-    'Review': '#6b7280',
-    'Review not requested': '#6b7280'
+    'Collected': '#eaa83d',
+    'Driver assigned for delivery': '#ecd0a7',
+    'Delivered': '#38651d'
   };
 
-  // Map
-  const map = L.map('map', { zoomSnap:0.5, zoomDelta:0.5 }).setView([52.8,-1.6], 6);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'&copy; OpenStreetMap' }).addTo(map);
+  const jobs = [];
+  let activeStatuses = new Set(Object.keys(statusColours));
 
-  // Elements/state
-  const toolbar = document.getElementById('toolbar');
-  const panel   = document.getElementById('panel');
-  const dayInput = document.getElementById('day'); dayInput.valueAsDate = new Date();
-  const startInput = document.getElementById('start');
-  const depotPcInput = document.getElementById('depotPc');
-  const statusGroup = document.getElementById('statusGroup');
-
-  const jobs = new Map();     // id -> job
-  const assignments = {};     // driverId -> jobIds
-  const depotQueue = [];      // jobIds staged/holding
-  const waypointLayers = {};  // driverId -> cluster group
-  const routeCtrls = {};      // driverId -> routing control
-  const summaries = {};       // driverId -> {distance,duration}
-  const osrmRoute = 'https://router.project-osrm.org/route/v1';
-
-  // Global layer for ALL job pins
-  const pinsLayer = L.markerClusterGroup({
-    showCoverageOnHover:false, spiderfyOnEveryZoom:true, maxClusterRadius:40
-  }).addTo(map);
-
-  // Ensure only one hidden CSV input
-  if (document.querySelectorAll('#csvUpload').length > 1) {
-    document.querySelectorAll('#csvUpload').forEach((n,i)=>{ if(i>0) n.remove(); });
+  function makeIcon(letter, colour){
+    return L.divIcon({className:'', html:`<div class="mm-pin" style="background:${colour}">${letter}</div>`, iconSize:[22,22], iconAnchor:[11,11]});
   }
 
-  // Build per-driver groups/controls (for route lines)
-  drivers.forEach(d=>{
-    assignments[d.id] = [];
-    waypointLayers[d.id] = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnEveryZoom:true, maxClusterRadius:40 }).addTo(map);
-    routeCtrls[d.id] = L.Routing.control({
-      router: L.Routing.osrmv1({ serviceUrl: osrmRoute }),
-      waypoints: [], addWaypoints:false, routeWhileDragging:false, show:false, draggableWaypoints:false,
-      lineOptions:{ styles:[{ color:d.color, weight:3, opacity:0.95 }] }
-    }).addTo(map);
-    routeCtrls[d.id].on('routesfound', e=>{
-      const r = e.routes[0];
-      summaries[d.id] = { distance: r.summary.totalDistance, duration: r.summary.totalTime };
-      renderPanel();
-    });
-  });
-
-  // Helpers
-  function setPanelTopUnderToolbar(){
-    const rect = toolbar.getBoundingClientRect();
-    const bottom = Math.max(rect.bottom, 60);
-    document.documentElement.style.setProperty('--toolbar-bottom', bottom + 'px');
-  }
-  setPanelTopUnderToolbar(); window.addEventListener('resize', setPanelTopUnderToolbar);
-
-  function pin(letter, colour){
-    return L.divIcon({ className:'', html:`<div class="mm-pin" style="background:${colour}">${letter}</div>`, iconSize:[20,20], iconAnchor:[10,10] });
-  }
-  function fmtH(sec){ const h=Math.floor(sec/3600), m=Math.round((sec%3600)/60); return `${h}h ${m}m`; }
-  function selectedDay(){ const d = new Date(dayInput.value); d.setHours(0,0,0,0); return d; }
-  function isReady(j){ if(!j.ready_date) return true; const d=new Date(j.ready_date); d.setHours(0,0,0,0); return d.getTime() <= selectedDay().getTime(); }
-  function addMarkerTo(layer, lat, lng, label, letter, colour){
-    const m = L.marker([lat,lng], { icon: pin(letter, colour) }).bindTooltip(label);
-    layer.addLayer(m);
-  }
-
-  // UK postcode extractor and normaliser (AA9A 9AA etc.)
+  // Extract UK postcode from address text
   function extractPostcode(text){
     if(!text) return '';
     const s = String(text).toUpperCase();
@@ -228,337 +74,77 @@
     while((m = re.exec(s))){ last = m[1] || m[0]; }
     if(!last) return '';
     const compact = last.replace(/\s+/g,'');
-    return compact.replace(/^(.+?)(\d[A-Z]{2})$/, (_,outward,inward)=> outward.trim()+" "+inward);
-  }
-  function pickPostcode(rec, keys){
-    for(const k of keys){
-      if(k in rec){
-        const pc = extractPostcode(rec[k]);
-        if(pc) return pc;
-      }
-    }
-    return '';
+    return compact.replace(/^(.+?)(\d[A-Z]{2})$/, (_,a,b)=>a.trim()+' '+b);
   }
 
-  // UK geocoder (postcodes.io) – reliable + fast
   async function geocode(pc){
     if(!pc) return null;
     const q = pc.replace(/\s+/g,'');
     try{
-      const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(q)}`);
-      const data = await res.json();
-      if(data && data.status===200 && data.result){
-        return { lat: data.result.latitude, lng: data.result.longitude };
-      }
+      const r = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(q)}`);
+      const d = await r.json();
+      if(d && d.status===200 && d.result) return {lat:d.result.latitude, lng:d.result.longitude};
     }catch(e){}
     return null;
   }
 
-  // Import JSON (optional)
-  document.getElementById('importJsonBtn').onclick = async ()=>{
-    const text = prompt('Paste jobs JSON: [{"id","title","collection_postcode","delivery_postcode","part_exchange_postcode?","status","plan?","ready_date?"}]');
-    if(!text) return;
-    try{
-      const arr = JSON.parse(text);
-      for(const j of arr){ const id=await upsertJob(j); if(!depotQueue.includes(id)) depotQueue.push(id); }
-      renderPanel(); drivers.forEach(d=>drawDriver(d.id)); drawAllPins(); fitAll();
-    }catch(err){ alert('Import failed: '+err.message); }
-  };
+  async function plotJobs(){
+    markers.clearLayers();
+    for(const j of jobs){
+      if(!activeStatuses.has(j.status)) continue;
+      if(!j.lat || !j.lng) continue;
+      const c = statusColours[j.status] || '#555';
+      const letter = j.status[0].toUpperCase();
+      const m = L.marker([j.lat,j.lng], {icon:makeIcon(letter,c)})
+        .bindPopup(`<b>${j.status}</b><br>${j.title || ''}<br>${j.address || ''}`);
+      markers.addLayer(m);
+    }
+    if(markers.getLayers().length) map.fitBounds(markers.getBounds().pad(0.2));
+  }
 
-  // Import CSV (works with quoted full addresses)
-  document.getElementById('importCsvBtn').addEventListener('click', ()=> document.getElementById('csvUpload').click());
-  document.getElementById('csvUpload').addEventListener('change', async (e) => {
-    const file = e.target.files?.[0]; if (!file) return;
+  function updateFilters(){
+    const box = document.getElementById('statusFilters');
+    box.innerHTML = Object.entries(statusColours).map(([st,col])=>`
+      <label><input type="checkbox" data-status="${st}" checked><span class="dot" style="background:${col}"></span>${st}</label>
+    `).join('');
+    box.querySelectorAll('input').forEach(cb=>{
+      cb.addEventListener('change',()=>{
+        if(cb.checked) activeStatuses.add(cb.dataset.status);
+        else activeStatuses.delete(cb.dataset.status);
+        plotJobs();
+      });
+    });
+  }
 
+  updateFilters();
+
+  document.getElementById('importCsvBtn').onclick = ()=> document.getElementById('csvUpload').click();
+  document.getElementById('csvUpload').addEventListener('change', e=>{
+    const file = e.target.files?.[0];
+    if(!file) return;
     Papa.parse(file, {
-      header: true,
-      skipEmptyLines: 'greedy',
-      transformHeader: h => h.trim(),
-      complete: async (results) => {
-        const rows = results.data;
-        let imported = 0;
-
-        for(const rec of rows){
-          // Case-insensitive getter for known names
-          const get = (...names)=> {
-            for(const n of names){
-              const k = Object.keys(rec).find(x=> x.toLowerCase()===String(n).toLowerCase());
-              if(k && rec[k]!=null && String(rec[k]).trim()!=='') return String(rec[k]).trim();
-            }
-            return '';
-          };
-
-          // explicit postcodes if present
-          let collection_pc = get('collection_postcode','Collection Postcode','Pickup Postcode','From Postcode','Sender Postcode','Origin Postcode');
-          let delivery_pc   = get('delivery_postcode','Delivery Postcode','Dropoff Postcode','To Postcode','Recipient Postcode','Destination Postcode');
-
-          // else extract from full address fields
-          if(!collection_pc){
-            collection_pc = pickPostcode(rec, [
-              'collection_address','Collection Address','pickup_address','Pickup Address',
-              'from_address','From Address','sender_address','Sender Address','origin','Origin'
-            ]);
-          }
-          if(!delivery_pc){
-            delivery_pc = pickPostcode(rec, [
-              'delivery_address','Delivery Address','dropoff_address','Dropoff Address',
-              'to_address','To Address','recipient_address','Recipient Address','destination','Destination'
-            ]);
-          }
-
-          // final fallback: scan entire row
-          if(!collection_pc) collection_pc = extractPostcode(Object.values(rec).join(' '));
-          if(!delivery_pc)   delivery_pc   = extractPostcode(Object.values(rec).join(' '));
-
-          const job = {
-            id: get('id','job_id','Waybill','Waybill ID','Ref','Reference') || crypto.randomUUID(),
-            title: get('title','job_title','Description','Notes') || `${collection_pc} → ${delivery_pc}`,
-            collection_postcode: collection_pc,
-            delivery_postcode:   delivery_pc,
-            part_exchange_postcode: get('part_exchange_postcode','PX Postcode','Part Exchange','Return Postcode'),
-            status: get('status','Shipment Status','WB Status','Order Status') || 'Booking received',
-            plan: get('plan','Leg Plan','Leg Type'),
-            ready_date: get('ready_date','Ready Date','Available Date','Collection Date'),
-            driver: get('driver','Driver','Assigned Driver'),
-            stage: get('stage','Depot','Hub','At Depot')
-          };
-
-          const id = await upsertJob(job);
-          if (!depotQueue.includes(id)) depotQueue.push(id);
-          imported++;
+      header:true,
+      skipEmptyLines:'greedy',
+      complete: async (res)=>{
+        let count=0;
+        for(const r of res.data){
+          const address = Object.values(r).join(' ');
+          const pc = extractPostcode(address);
+          if(!pc) continue;
+          const g = await geocode(pc);
+          if(!g) continue;
+          const status = (r['status'] || r['Shipment Status'] || 'Booking received').trim();
+          jobs.push({status, title:r['title']||r['Description']||'', address, lat:g.lat, lng:g.lng});
+          count++;
         }
-
-        renderPanel(); drivers.forEach(d=>drawDriver(d.id)); drawAllPins(); fitAll();
-        alert(`Imported ${imported} jobs from CSV (postcodes auto-extracted).`);
-        e.target.value = '';
+        alert(`Imported ${count} jobs`);
+        plotJobs();
       }
     });
   });
 
-  // Export day (GeoJSON)
-  document.getElementById('exportBtn').onclick = ()=>{
-    const fc = { type:'FeatureCollection', features:[], properties:{ date: dayInput.value, start_time: startInput.value, depot: depotPcInput.value } };
-    depotQueue.forEach(id=>{ const j=jobs.get(id); if(!j) return; fc.features.push({ type:'Feature', properties:{ kind:'depot_job', id:j.id, title:j.title, status:j.status, ready_date:j.ready_date||'' }, geometry:null }); });
-    drivers.forEach(d=>{
-      const ids = assignments[d.id]||[];
-      const addPt = (lat,lng,props)=> fc.features.push({ type:'Feature', properties:{ driver:d.name, ...props }, geometry:{ type:'Point', coordinates:[lng,lat] }});
-      const plan = routeCtrls[d.id].getPlan();
-      const wp = plan.getWaypoints().filter(w=>w.latLng).map(w=>[w.latLng.lng, w.latLng.lat]);
-      if(wp.length>=2){ fc.features.push({ type:'Feature', properties:{ driver:d.name, kind:'route', distance_m:(summaries[d.id]?.distance)||0, duration_s:(summaries[d.id]?.duration)||0 }, geometry:{ type:'LineString', coordinates: wp } }); }
-      ids.forEach((jid, orderIdx)=>{
-        const j = jobs.get(jid); if(!j) return;
-        if(j.plan==='collect_to_depot'){
-          if(j.collection_lat!=null) addPt(j.collection_lat,j.collection_lng,{ kind:'collection', order: orderIdx+1, job_id:j.id, status:j.status, postcode:j.collection_postcode, ready_date:j.ready_date||'' });
-        }else if(j.plan==='depot_to_delivery'){
-          if(j.delivery_lat!=null) addPt(j.delivery_lat,j.delivery_lng,{ kind:'delivery', order: orderIdx+1, job_id:j.id, status:j.status, postcode:j.delivery_postcode, ready_date:j.ready_date||'' });
-          if(j.part_exchange_postcode && j.collection_lat!=null) addPt(j.collection_lat,j.collection_lng,{ kind:'px_return', order: orderIdx+1.1, job_id:j.id, status:j.status, postcode:j.part_exchange_postcode, ready_date:j.ready_date||'' });
-        }else{ // same_day
-          if(j.collection_lat!=null) addPt(j.collection_lat,j.collection_lng,{ kind:'collection', order: orderIdx+1, job_id:j.id, status:j.status, postcode:j.collection_postcode, ready_date:j.ready_date||'' });
-          if(j.delivery_lat!=null) addPt(j.delivery_lat,j.delivery_lng,{ kind:'delivery', order: orderIdx+1.1, job_id:j.id, status:j.status, postcode:j.delivery_postcode, ready_date:j.ready_date||'' });
-          if(j.part_exchange_postcode && j.collection_lat!=null) addPt(j.collection_lat,j.collection_lng,{ kind:'px_return', order: orderIdx+1.2, job_id:j.id, status:j.status, postcode:j.part_exchange_postcode, ready_date:j.ready_date||'' });
-        }
-      });
-    });
-    const blob = new Blob([JSON.stringify(fc,null,2)], {type:'application/geo+json'});
-    saveAs(blob, `move-routes-${dayInput.value}.geojson`);
-  };
-
-  // Upsert + geocode
-  async function upsertJob(job){
-    const id = job.id || crypto.randomUUID();
-    const norm = {
-      id,
-      title: job.title || `${job.collection_postcode||''} → ${job.delivery_postcode||''}`.trim(),
-      collection_postcode: job.collection_postcode || '',
-      delivery_postcode: job.delivery_postcode || '',
-      part_exchange_postcode: job.part_exchange_postcode || '',
-      status: job.status || 'Booking received',
-      plan: job.plan || inferPlan(job),
-      ready_date: job.ready_date || '',
-      collection_lat: job.collection_lat, collection_lng: job.collection_lng,
-      delivery_lat: job.delivery_lat, delivery_lng: job.delivery_lng,
-      px_lat: job.px_lat, px_lng: job.px_lng
-    };
-    if(norm.collection_postcode && (norm.collection_lat==null || norm.collection_lng==null)){
-      const g = await geocode(norm.collection_postcode); if(g){ norm.collection_lat=g.lat; norm.collection_lng=g.lng; }
-    }
-    if(norm.delivery_postcode && (norm.delivery_lat==null || norm.delivery_lng==null)){
-      const g = await geocode(norm.delivery_postcode); if(g){ norm.delivery_lat=g.lat; norm.delivery_lng=g.lng; }
-    }
-    if(norm.part_exchange_postcode && (norm.px_lat==null || norm.px_lng==null)){
-      const g = await geocode(norm.part_exchange_postcode); if(g){ norm.px_lat=g.lat; norm.px_lng=g.lng; }
-    }
-    jobs.set(id, norm);
-    return id;
-  }
-
-  function inferPlan(j){
-    const s=(j.status||'').toLowerCase();
-    if(s.includes('assigned for collection')||s.includes('pick up')||s.includes('booking')) return 'collect_to_depot';
-    if(s.includes('assigned for delivery')) return 'depot_to_delivery';
-    return 'same_day';
-  }
-
-  // Draw ALL pins (filtered by checkboxes + ready date)
-  function getSelectedStatuses(){
-    const all = statusGroup.querySelector('input[data-status="all"]');
-    const items = [...statusGroup.querySelectorAll('input[type="checkbox"][data-status]:not([data-status="all"])')];
-    if(all && all.checked) return new Set(items.map(i=>i.dataset.status));
-    return new Set(items.filter(i=>i.checked).map(i=>i.dataset.status));
-  }
-  statusGroup.addEventListener('change', (e)=>{
-    if(e.target.matches('input[data-status="all"]')){
-      const on = e.target.checked;
-      statusGroup.querySelectorAll('input[type="checkbox"][data-status]:not([data-status="all"])').forEach(cb=> cb.checked = on);
-    }else{
-      const items = [...statusGroup.querySelectorAll('input[type="checkbox"][data-status]:not([data-status="all"])')];
-      const all = statusGroup.querySelector('input[data-status="all"]');
-      if(all) all.checked = items.every(i=>i.checked);
-    }
-    drawAllPins();
-  });
-
-  function drawAllPins(){
-    pinsLayer.clearLayers();
-    const selectedStatuses = getSelectedStatuses();
-    for(const [,j] of jobs){
-      if(!isReady(j)) continue;
-      if(!selectedStatuses.has(j.status)) continue;
-      const colour = statusColours[j.status] || '#374151';
-
-      if(j.plan==='collect_to_depot'){
-        if(j.collection_lat!=null) addMarkerTo(pinsLayer, j.collection_lat, j.collection_lng, `Collection • ${j.collection_postcode}`, 'C', colour);
-      }else if(j.plan==='depot_to_delivery'){
-        if(j.delivery_lat!=null)   addMarkerTo(pinsLayer, j.delivery_lat,   j.delivery_lng,   `Delivery • ${j.delivery_postcode}`,   'L', colour);
-      }else{ // same_day
-        if(j.collection_lat!=null) addMarkerTo(pinsLayer, j.collection_lat, j.collection_lng, `Collection • ${j.collection_postcode}`, 'C', colour);
-        if(j.delivery_lat!=null)   addMarkerTo(pinsLayer, j.delivery_lat,   j.delivery_lng,   `Delivery • ${j.delivery_postcode}`,   'L', colour);
-      }
-    }
-  }
-
-  // Draw per driver (routes)
-  async function drawDriver(driverId){
-    const d = drivers.find(x=>x.id===driverId);
-    const layer = waypointLayers[driverId]; layer.clearLayers();
-
-    const todays = (assignments[driverId]||[])
-      .map(id=>jobs.get(id))
-      .filter(j=>j && isReady(j));
-
-    const home = await geocode(d.homePostcode);
-    const depot = await geocode(depotPcInput.value || 'OX447RW');
-
-    const waypoints = [];
-    function add(lat,lng,label,letter,colour){
-      const m = L.marker([lat,lng], { icon: pin(letter, colour) }).bindTooltip(label);
-      layer.addLayer(m); waypoints.push(L.latLng(lat,lng));
-    }
-
-    if(home) add(home.lat,home.lng, `${d.name} START`, 'H', '#333');
-
-    for(const j of todays){
-      const colour = statusColours[j.status] || '#374151';
-      if(j.plan==='collect_to_depot'){
-        if(j.collection_lat!=null) add(j.collection_lat,j.collection_lng, `Collection • ${j.collection_postcode}`, 'C', colour);
-        if(depot) add(depot.lat,depot.lng, `Depot • ${depotPcInput.value}`, 'D', '#111');
-      }else if(j.plan==='depot_to_delivery'){
-        if(depot) add(depot.lat,depot.lng, `Depot • ${depotPcInput.value}`, 'D', '#111');
-        if(j.delivery_lat!=null) add(j.delivery_lat,j.delivery_lng, `Delivery • ${j.delivery_postcode}`, 'L', colour);
-        if(j.part_exchange_postcode && j.collection_lat!=null){ add(j.collection_lat,j.collection_lng, `PX Return • ${j.part_exchange_postcode}`, 'P', colour); }
-      }else{
-        if(j.collection_lat!=null) add(j.collection_lat,j.collection_lng, `Collection • ${j.collection_postcode}`, 'C', colour);
-        if(j.delivery_lat!=null) add(j.delivery_lat,j.delivery_lng, `Delivery • ${j.delivery_postcode}`, 'L', colour);
-        if(j.part_exchange_postcode && j.collection_lat!=null){ add(j.collection_lat,j.collection_lng, `PX Return • ${j.part_exchange_postcode}`, 'P', colour); }
-      }
-    }
-
-    if(home) add(home.lat,home.lng, `${d.name} END`, 'H', '#333');
-    routeCtrls[driverId].setWaypoints(waypoints);
-  }
-
-  // Fit map to all currently plotted layers
-  function fitAll(){
-    const group = L.featureGroup([]);
-    pinsLayer.eachLayer(l=>group.addLayer(l));
-    for(const id in waypointLayers){ waypointLayers[id].eachLayer(l=>group.addLayer(l)); }
-    if(group.getLayers().length) map.fitBounds(group.getBounds().pad(0.2));
-  }
-
-  // Panel (planning)
-  function renderPanel(){
-    const dateStr = new Date(dayInput.value).toDateString();
-    const depotList = depotQueue.map(jid=>jobListItem(jid)).join('');
-
-    panel.innerHTML = `<h3>${dateStr}</h3>
-      <div class="routeCard" data-depot>
-        <header><span>🛠 Oxford Depot</span><span class="lite">${depotPcInput.value}</span></header>
-        <ul class="jobs" data-driver="depot">${depotList}</ul>
-        <div class="meta">Drag from Depot to a driver to plan delivery legs.</div>
-      </div>`
-      + drivers.map(d=>{
-        const ids = assignments[d.id]||[];
-        const list = ids.map(jid=>jobListItem(jid,d.id)).join('');
-        const s = summaries[d.id] || {distance:0,duration:0};
-        const meta = s.distance? `${(s.distance/1000).toFixed(1)} km · ${fmtH(s.duration)}` : '—';
-        return `<div class="routeCard" data-driver="${d.id}">
-          <header><span><span class="chip dot" style="background:${d.color}"></span>${d.name}</span>
-          <span class="meta">${meta}</span></header>
-          <ul class="jobs" data-driver="${d.id}">${list}</ul>
-          <div class="meta">Start/End: ${d.homePostcode}</div>
-        </div>`;
-      }).join('');
-
-    // Drag/drop wiring
-    panel.querySelectorAll('.jobs li[draggable="true"]').forEach(li=>{
-      li.addEventListener('dragstart', (e)=>{ e.dataTransfer.setData('text/plain', JSON.stringify({ jobId: li.dataset.id, from: li.dataset.driver })); });
-    });
-    panel.querySelectorAll('.jobs').forEach(list=>{
-      list.addEventListener('dragover', (e)=>{ e.preventDefault(); list.classList.add('dragover'); });
-      list.addEventListener('dragleave', ()=> list.classList.remove('dragover'));
-      list.addEventListener('drop', (e)=>{
-        e.preventDefault(); list.classList.remove('dragover');
-        const dropped = JSON.parse(e.dataTransfer.getData('text/plain')||'{}'); if(!dropped.jobId) return;
-        const { jobId, from } = dropped;
-        if(from==='depot'){ const i=depotQueue.indexOf(jobId); if(i>-1) depotQueue.splice(i,1); }
-        else if(from){ const idx = assignments[from].indexOf(jobId); if(idx>-1) assignments[from].splice(idx,1); drawDriver(from); }
-        const to = list.dataset.driver;
-        if(to==='depot'){ if(!depotQueue.includes(jobId)) depotQueue.push(jobId); }
-        else { if(!assignments[to].includes(jobId)) assignments[to].push(jobId); drawDriver(to); }
-        renderPanel();
-        drawAllPins();
-      });
-    });
-  }
-  function jobListItem(jobId, driverId){
-    const j = jobs.get(jobId); if(!j) return '';
-    const colour = statusColours[j.status] || '#374151';
-    const ready = j.ready_date? `<span class="badge" title="Ready date">📅 ${j.ready_date}</span>` : '';
-    const badge = `<span class="badge" style="background:${colour}; color:#fff; border-color:${colour}">${j.status}</span>`;
-    const planSel = `<select data-plan data-id="${j.id}">
-      <option value="collect_to_depot" ${j.plan==='collect_to_depot'?'selected':''}>Collection → Depot</option>
-      <option value="depot_to_delivery" ${j.plan==='depot_to_delivery'?'selected':''}>Depot → Delivery</option>
-      <option value="same_day" ${j.plan==='same_day'?'selected':''}>Same-day C → D</option>
-    </select>`;
-    return `<li draggable="true" data-id="${j.id}" data-driver="${driverId||'depot'}">
-      <div>
-        <div><strong>${j.title}</strong> ${ready}</div>
-        <div class="lite">C: ${j.collection_postcode||'—'} · D: ${j.delivery_postcode||'—'} ${j.part_exchange_postcode? ' · PX: '+j.part_exchange_postcode:''}</div>
-      </div>
-      <div style="display:flex; gap:6px; align-items:center">${badge}${planSel}<button data-action="status" data-id="${j.id}" title="Cycle status">↻</button></div>
-    </li>`;
-  }
-
-  // Hooks
-  dayInput.addEventListener('change', ()=>{ drivers.forEach(d=>drawDriver(d.id)); renderPanel(); drawAllPins(); setPanelTopUnderToolbar(); });
-  depotPcInput.addEventListener('change', ()=>{ drivers.forEach(d=>drawDriver(d.id)); drawAllPins(); });
-
-  // Initial render
-  drivers.forEach(d=>drawDriver(d.id));
-  renderPanel();
-  drawAllPins();
-  fitAll();
 })();
 </script>
 </body>
 </html>
+``

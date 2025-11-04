@@ -18,6 +18,9 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
+  <!-- Robust CSV parser for quoted addresses -->
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
   <!-- Export -->
   <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
@@ -44,6 +47,7 @@
     /* Status checkbox group */
     .status-group{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:6px 8px; border:1px dashed #e5e7eb; border-radius:10px; background:#fafafa; }
     .status-group label{ display:flex; align-items:center; gap:6px; font-size:12px; padding:2px 6px; border-radius:999px; border:1px solid #e5e7eb; background:#fff; }
+    .dot{ width:10px; height:10px; border-radius:50%; display:inline-block }
 
     /* Right panel sits under toolbar */
     .panel{
@@ -112,14 +116,12 @@
     <div class="divider"></div>
     <div class="status-group" id="statusGroup">
       <label><input type="checkbox" data-status="all" checked>All</label>
-      <label><input type="checkbox" data-status="Pick up Request" checked><span style="width:10px;height:10px;background:#de3323;border-radius:50%;display:inline-block"></span>Pick up</label>
-      <label><input type="checkbox" data-status="Booking received" checked><span style="width:10px;height:10px;background:#2e22f4;border-radius:50%;display:inline-block"></span>Booking</label>
-      <label><input type="checkbox" data-status="Driver assigned for collection" checked><span style="width:10px;height:10px;background:#ecd0a7;border-radius:50%;display:inline-block"></span>Assigned (C)</label>
-      <label><input type="checkbox" data-status="Collected" checked><span style="width:10px;height:10px;background:#eaa83d;border-radius:50%;display:inline-block"></span>Collected</label>
-      <label><input type="checkbox" data-status="Driver assigned for delivery" checked><span style="width:10px;height:10px;background:#ecd0a7;border-radius:50%;display:inline-block"></span>Assigned (D)</label>
-      <label><input type="checkbox" data-status="Delivered" checked><span style="width:10px;height:10px;background:#38651d;border-radius:50%;display:inline-block"></span>Delivered</label>
-      <label><input type="checkbox" data-status="Review" checked>Review</label>
-      <label><input type="checkbox" data-status="Review not requested" checked>Review NR</label>
+      <label><span class="dot" style="background:#de3323"></span><input type="checkbox" data-status="Pick up Request" checked>Pick up</label>
+      <label><span class="dot" style="background:#2e22f4"></span><input type="checkbox" data-status="Booking received" checked>Booking</label>
+      <label><span class="dot" style="background:#ecd0a7"></span><input type="checkbox" data-status="Driver assigned for collection" checked>Assigned (C)</label>
+      <label><span class="dot" style="background:#eaa83d"></span><input type="checkbox" data-status="Collected" checked>Collected</label>
+      <label><span class="dot" style="background:#ecd0a7"></span><input type="checkbox" data-status="Driver assigned for delivery" checked>Assigned (D)</label>
+      <label><span class="dot" style="background:#38651d"></span><input type="checkbox" data-status="Delivered" checked>Delivered</label>
     </div>
   </div>
 
@@ -172,17 +174,17 @@
   const summaries = {};       // driverId -> {distance,duration}
   const osrmRoute = 'https://router.project-osrm.org/route/v1';
 
-  // One marker layer that shows ALL pins (requested behaviour)
+  // Global layer for ALL job pins
   const pinsLayer = L.markerClusterGroup({
     showCoverageOnHover:false, spiderfyOnEveryZoom:true, maxClusterRadius:40
   }).addTo(map);
 
-  // Keep only one hidden CSV input
+  // Ensure only one hidden CSV input
   if (document.querySelectorAll('#csvUpload').length > 1) {
     document.querySelectorAll('#csvUpload').forEach((n,i)=>{ if(i>0) n.remove(); });
   }
 
-  // Build per-driver groups/controls (kept for routes/panel; pinsLayer is independent)
+  // Build per-driver groups/controls (for route lines)
   drivers.forEach(d=>{
     assignments[d.id] = [];
     waypointLayers[d.id] = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnEveryZoom:true, maxClusterRadius:40 }).addTo(map);
@@ -217,26 +219,42 @@
     layer.addLayer(m);
   }
 
-  // Status checkbox logic
-  function getSelectedStatuses(){
-    const all = statusGroup.querySelector('input[data-status="all"]');
-    const items = [...statusGroup.querySelectorAll('input[type="checkbox"][data-status]:not([data-status="all"])')];
-    if(all.checked) return new Set(items.map(i=>i.dataset.status));
-    return new Set(items.filter(i=>i.checked).map(i=>i.dataset.status));
+  // UK postcode extractor and normaliser (AA9A 9AA etc.)
+  function extractPostcode(text){
+    if(!text) return '';
+    const s = String(text).toUpperCase();
+    const re = /\b(GIR 0AA|[A-PR-UWYZ][A-HK-Y]?\d[\dA-Z]?\s*\d[A-Z]{2})\b/ig;
+    let m, last=null;
+    while((m = re.exec(s))){ last = m[1] || m[0]; }
+    if(!last) return '';
+    const compact = last.replace(/\s+/g,'');
+    return compact.replace(/^(.+?)(\d[A-Z]{2})$/, (_,outward,inward)=> outward.trim()+" "+inward);
   }
-  statusGroup.addEventListener('change', (e)=>{
-    if(e.target.matches('input[data-status="all"]')){
-      const on = e.target.checked;
-      statusGroup.querySelectorAll('input[type="checkbox"][data-status]:not([data-status="all"])').forEach(cb=> cb.checked = on);
-    }else{
-      const items = [...statusGroup.querySelectorAll('input[type="checkbox"][data-status]:not([data-status="all"])')];
-      const all = statusGroup.querySelector('input[data-status="all"]');
-      all.checked = items.every(i=>i.checked);
+  function pickPostcode(rec, keys){
+    for(const k of keys){
+      if(k in rec){
+        const pc = extractPostcode(rec[k]);
+        if(pc) return pc;
+      }
     }
-    drawAllPins();
-  });
+    return '';
+  }
 
-  // Import JSON
+  // UK geocoder (postcodes.io) – reliable + fast
+  async function geocode(pc){
+    if(!pc) return null;
+    const q = pc.replace(/\s+/g,'');
+    try{
+      const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if(data && data.status===200 && data.result){
+        return { lat: data.result.latitude, lng: data.result.longitude };
+      }
+    }catch(e){}
+    return null;
+  }
+
+  // Import JSON (optional)
   document.getElementById('importJsonBtn').onclick = async ()=>{
     const text = prompt('Paste jobs JSON: [{"id","title","collection_postcode","delivery_postcode","part_exchange_postcode?","status","plan?","ready_date?"}]');
     if(!text) return;
@@ -247,42 +265,77 @@
     }catch(err){ alert('Import failed: '+err.message); }
   };
 
-  // Import CSV
+  // Import CSV (works with quoted full addresses)
   document.getElementById('importCsvBtn').addEventListener('click', ()=> document.getElementById('csvUpload').click());
   document.getElementById('csvUpload').addEventListener('change', async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
-    const text = await file.text();
-    const lines = text.trim().split(/\r?\n/);
-    if (lines.length < 2) { alert('CSV appears empty.'); e.target.value=''; return; }
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-    const get = (row, keys) => { for (const k of keys) { const i = headers.indexOf(k); if (i > -1 && row[i] != null) return row[i].trim(); } return ''; };
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: 'greedy',
+      transformHeader: h => h.trim(),
+      complete: async (results) => {
+        const rows = results.data;
+        let imported = 0;
 
-    let imported = 0;
-    for (let i = 1; i < lines.length; i++) {
-      if (!lines[i].trim()) continue;
-      const row = lines[i].split(',');
-      const job = {
-        id: get(row, ['id','job_id']) || crypto.randomUUID(),
-        title: get(row, ['title','job_title']),
-        collection_postcode: get(row, ['collection_postcode','collection','pickup_postcode','pickup']),
-        delivery_postcode:   get(row, ['delivery_postcode','delivery','dropoff_postcode','dropoff']),
-        part_exchange_postcode: get(row, ['part_exchange_postcode','px_postcode','px']),
-        status: get(row, ['status']) || 'Booking received',
-        plan: get(row, ['plan']) || 'same_day',
-        ready_date: get(row, ['ready_date']) // YYYY-MM-DD
-      };
-      const id = await upsertJob(job);
-      if (!depotQueue.includes(id)) depotQueue.push(id);
-      imported++;
-    }
+        for(const rec of rows){
+          // Case-insensitive getter for known names
+          const get = (...names)=> {
+            for(const n of names){
+              const k = Object.keys(rec).find(x=> x.toLowerCase()===String(n).toLowerCase());
+              if(k && rec[k]!=null && String(rec[k]).trim()!=='') return String(rec[k]).trim();
+            }
+            return '';
+          };
 
-    renderPanel(); drivers.forEach(d=>drawDriver(d.id)); drawAllPins(); fitAll();
-    alert(`Imported ${imported} jobs from CSV.`);
-    e.target.value = '';
+          // explicit postcodes if present
+          let collection_pc = get('collection_postcode','Collection Postcode','Pickup Postcode','From Postcode','Sender Postcode','Origin Postcode');
+          let delivery_pc   = get('delivery_postcode','Delivery Postcode','Dropoff Postcode','To Postcode','Recipient Postcode','Destination Postcode');
+
+          // else extract from full address fields
+          if(!collection_pc){
+            collection_pc = pickPostcode(rec, [
+              'collection_address','Collection Address','pickup_address','Pickup Address',
+              'from_address','From Address','sender_address','Sender Address','origin','Origin'
+            ]);
+          }
+          if(!delivery_pc){
+            delivery_pc = pickPostcode(rec, [
+              'delivery_address','Delivery Address','dropoff_address','Dropoff Address',
+              'to_address','To Address','recipient_address','Recipient Address','destination','Destination'
+            ]);
+          }
+
+          // final fallback: scan entire row
+          if(!collection_pc) collection_pc = extractPostcode(Object.values(rec).join(' '));
+          if(!delivery_pc)   delivery_pc   = extractPostcode(Object.values(rec).join(' '));
+
+          const job = {
+            id: get('id','job_id','Waybill','Waybill ID','Ref','Reference') || crypto.randomUUID(),
+            title: get('title','job_title','Description','Notes') || `${collection_pc} → ${delivery_pc}`,
+            collection_postcode: collection_pc,
+            delivery_postcode:   delivery_pc,
+            part_exchange_postcode: get('part_exchange_postcode','PX Postcode','Part Exchange','Return Postcode'),
+            status: get('status','Shipment Status','WB Status','Order Status') || 'Booking received',
+            plan: get('plan','Leg Plan','Leg Type'),
+            ready_date: get('ready_date','Ready Date','Available Date','Collection Date'),
+            driver: get('driver','Driver','Assigned Driver'),
+            stage: get('stage','Depot','Hub','At Depot')
+          };
+
+          const id = await upsertJob(job);
+          if (!depotQueue.includes(id)) depotQueue.push(id);
+          imported++;
+        }
+
+        renderPanel(); drivers.forEach(d=>drawDriver(d.id)); drawAllPins(); fitAll();
+        alert(`Imported ${imported} jobs from CSV (postcodes auto-extracted).`);
+        e.target.value = '';
+      }
+    });
   });
 
-  // Export day
+  // Export day (GeoJSON)
   document.getElementById('exportBtn').onclick = ()=>{
     const fc = { type:'FeatureCollection', features:[], properties:{ date: dayInput.value, start_time: startInput.value, depot: depotPcInput.value } };
     depotQueue.forEach(id=>{ const j=jobs.get(id); if(!j) return; fc.features.push({ type:'Feature', properties:{ kind:'depot_job', id:j.id, title:j.title, status:j.status, ready_date:j.ready_date||'' }, geometry:null }); });
@@ -316,7 +369,7 @@
     const norm = {
       id,
       title: job.title || `${job.collection_postcode||''} → ${job.delivery_postcode||''}`.trim(),
-      collection_postcode: job.collection_postcode || job.postcode || '',
+      collection_postcode: job.collection_postcode || '',
       delivery_postcode: job.delivery_postcode || '',
       part_exchange_postcode: job.part_exchange_postcode || '',
       status: job.status || 'Booking received',
@@ -346,25 +399,33 @@
     return 'same_day';
   }
 
-  async function geocode(pc){
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(pc+', UK')}`;
-    const res = await fetch(url, { headers:{'Accept-Language':'en'} });
-    const data = await res.json(); if(!data.length) return null; return { lat:+data[0].lat, lng:+data[0].lon };
+  // Draw ALL pins (filtered by checkboxes + ready date)
+  function getSelectedStatuses(){
+    const all = statusGroup.querySelector('input[data-status="all"]');
+    const items = [...statusGroup.querySelectorAll('input[type="checkbox"][data-status]:not([data-status="all"])')];
+    if(all && all.checked) return new Set(items.map(i=>i.dataset.status));
+    return new Set(items.filter(i=>i.checked).map(i=>i.dataset.status));
   }
+  statusGroup.addEventListener('change', (e)=>{
+    if(e.target.matches('input[data-status="all"]')){
+      const on = e.target.checked;
+      statusGroup.querySelectorAll('input[type="checkbox"][data-status]:not([data-status="all"])').forEach(cb=> cb.checked = on);
+    }else{
+      const items = [...statusGroup.querySelectorAll('input[type="checkbox"][data-status]:not([data-status="all"])')];
+      const all = statusGroup.querySelector('input[data-status="all"]');
+      if(all) all.checked = items.every(i=>i.checked);
+    }
+    drawAllPins();
+  });
 
-  function assign(driverId, jobId){ if(!assignments[driverId].includes(jobId)) assignments[driverId].push(jobId); drawDriver(driverId); }
-
-  // Draw all pins (ALL jobs; filtered by status checkboxes + ready_date)
   function drawAllPins(){
     pinsLayer.clearLayers();
     const selectedStatuses = getSelectedStatuses();
-    const isSelected = (st)=> selectedStatuses.has(st);
-
     for(const [,j] of jobs){
       if(!isReady(j)) continue;
-      if(!isSelected(j.status)) continue;
-
+      if(!selectedStatuses.has(j.status)) continue;
       const colour = statusColours[j.status] || '#374151';
+
       if(j.plan==='collect_to_depot'){
         if(j.collection_lat!=null) addMarkerTo(pinsLayer, j.collection_lat, j.collection_lng, `Collection • ${j.collection_postcode}`, 'C', colour);
       }else if(j.plan==='depot_to_delivery'){
@@ -376,7 +437,7 @@
     }
   }
 
-  // Draw per driver (routes) – unchanged
+  // Draw per driver (routes)
   async function drawDriver(driverId){
     const d = drivers.find(x=>x.id===driverId);
     const layer = waypointLayers[driverId]; layer.clearLayers();
@@ -416,7 +477,7 @@
     routeCtrls[driverId].setWaypoints(waypoints);
   }
 
-  // Fit map to everything currently plotted (pins + driver layers)
+  // Fit map to all currently plotted layers
   function fitAll(){
     const group = L.featureGroup([]);
     pinsLayer.eachLayer(l=>group.addLayer(l));
@@ -424,7 +485,7 @@
     if(group.getLayers().length) map.fitBounds(group.getBounds().pad(0.2));
   }
 
-  // Panel (kept as-is for planning)
+  // Panel (planning)
   function renderPanel(){
     const dateStr = new Date(dayInput.value).toDateString();
     const depotList = depotQueue.map(jid=>jobListItem(jid)).join('');
@@ -465,7 +526,7 @@
         if(to==='depot'){ if(!depotQueue.includes(jobId)) depotQueue.push(jobId); }
         else { if(!assignments[to].includes(jobId)) assignments[to].push(jobId); drawDriver(to); }
         renderPanel();
-        drawAllPins(); // keep the global pins layer up to date
+        drawAllPins();
       });
     });
   }

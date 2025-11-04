@@ -166,4 +166,187 @@
 
   // Import jobs
   document.getElementById('importBtn').onclick = async ()=>{
-    const text = prompt('Paste
+    const text = prompt('Paste jobs JSON: [{"id","title","collection_postcode","delivery_postcode","part_exchange_postcode?","status","plan?"}]');
+    if(!text) return;
+    try{
+      const arr = JSON.parse(text);
+      for(const j of arr){ await upsertJob(j); }
+      renderPanel(); fitAll();
+    }catch(err){ alert('Import failed: '+err.message); }
+  };
+
+  // Export day
+  document.getElementById('exportBtn').onclick = ()=>{
+    const fc = { type:'FeatureCollection', features:[], properties:{ date: dayInput.value, start_time: startInput.value, depot: depotPcInput.value } };
+    depotQueue.forEach(id=>{ const j=jobs.get(id); if(!j) return; fc.features.push({ type:'Feature', properties:{ kind:'depot_job', id:j.id, title:j.title, status:j.status }, geometry:null }); });
+    drivers.forEach(d=>{
+      const ids = assignments[d.id];
+      const addPt = (lat,lng,props)=> fc.features.push({ type:'Feature', properties:{ driver:d.name, ...props }, geometry:{ type:'Point', coordinates:[lng,lat] }});
+      const plan = routeCtrls[d.id].getPlan();
+      const wp = plan.getWaypoints().filter(w=>w.latLng).map(w=>[w.latLng.lng, w.latLng.lat]);
+      if(wp.length>=2){ fc.features.push({ type:'Feature', properties:{ driver:d.name, kind:'route', distance_m:(summaries[d.id]?.distance)||0, duration_s:(summaries[d.id]?.duration)||0 }, geometry:{ type:'LineString', coordinates: wp } }); }
+      ids.forEach((jid, orderIdx)=>{
+        const j = jobs.get(jid); if(!j) return;
+        if(j.plan==='collect_to_depot'){
+          if(j.collection_lat!=null) addPt(j.collection_lat,j.collection_lng,{ kind:'collection', order: orderIdx+1, job_id:j.id, status:j.status, postcode:j.collection_postcode });
+        }else if(j.plan==='depot_to_delivery'){
+          if(j.delivery_lat!=null) addPt(j.delivery_lat,j.delivery_lng,{ kind:'delivery', order: orderIdx+1, job_id:j.id, status:j.status, postcode:j.delivery_postcode });
+          if(j.part_exchange_postcode && j.collection_lat!=null) addPt(j.collection_lat,j.collection_lng,{ kind:'px_return', order: orderIdx+1.1, job_id:j.id, status:j.status, postcode:j.part_exchange_postcode });
+        }else if(j.plan==='same_day'){
+          if(j.collection_lat!=null) addPt(j.collection_lat,j.collection_lng,{ kind:'collection', order: orderIdx+1, job_id:j.id, status:j.status, postcode:j.collection_postcode });
+          if(j.delivery_lat!=null) addPt(j.delivery_lat,j.delivery_lng,{ kind:'delivery', order: orderIdx+1.1, job_id:j.id, status:j.status, postcode:j.delivery_postcode });
+          if(j.part_exchange_postcode && j.collection_lat!=null) addPt(j.collection_lat,j.collection_lng,{ kind:'px_return', order: orderIdx+1.2, job_id:j.id, status:j.status, postcode:j.part_exchange_postcode });
+        }
+      });
+    });
+    const blob = new Blob([JSON.stringify(fc,null,2)], {type:'application/geo+json'});
+    saveAs(blob, `move-routes-${dayInput.value}.geojson`);
+  };
+
+  // Upsert a job; geocode missing lat/lng
+  async function upsertJob(job){
+    const id = job.id || crypto.randomUUID();
+    const norm = {
+      id,
+      title: job.title || `${job.collection_postcode||''} → ${job.delivery_postcode||''}`.trim(),
+      collection_postcode: job.collection_postcode || job.postcode || '',
+      delivery_postcode: job.delivery_postcode || '',
+      part_exchange_postcode: job.part_exchange_postcode || '',
+      status: job.status || 'Booking received',
+      plan: job.plan || inferPlan(job),
+      collection_lat: job.collection_lat, collection_lng: job.collection_lng,
+      delivery_lat: job.delivery_lat, delivery_lng: job.delivery_lng,
+      px_lat: job.px_lat, px_lng: job.px_lng
+    };
+    if(norm.collection_postcode && (norm.collection_lat==null || norm.collection_lng==null)){
+      const g = await geocode(norm.collection_postcode); if(g){ norm.collection_lat=g.lat; norm.collection_lng=g.lng; }
+    }
+    if(norm.delivery_postcode && (norm.delivery_lat==null || norm.delivery_lng==null)){
+      const g = await geocode(norm.delivery_postcode); if(g){ norm.delivery_lat=g.lat; norm.delivery_lng=g.lng; }
+    }
+    if(norm.part_exchange_postcode && (norm.px_lat==null || norm.px_lng==null)){
+      const g = await geocode(norm.part_exchange_postcode); if(g){ norm.px_lat=g.lat; norm.px_lng=g.lng; }
+    }
+    jobs.set(id, norm);
+    return id;
+  }
+
+  function inferPlan(j){
+    const s=(j.status||'').toLowerCase();
+    if(s.includes('assigned for collection')||s.includes('pick up')||s.includes('booking')) return 'collect_to_depot';
+    if(s.includes('assigned for delivery')) return 'depot_to_delivery';
+    return 'same_day';
+  }
+
+  async function geocode(pc){
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(pc+', UK')}`;
+    const res = await fetch(url, { headers:{'Accept-Language':'en'} });
+    const data = await res.json(); if(!data.length) return null; return { lat:+data[0].lat, lng:+data[0].lon };
+  }
+
+  function assign(driverId, jobId){ if(!assignments[driverId].includes(jobId)) assignments[driverId].push(jobId); drawDriver(driverId); }
+
+  async function drawDriver(driverId){
+    const d = drivers.find(x=>x.id===driverId);
+    const filter = statusFilter.value;
+    const todays = (assignments[driverId]||[]).map(id=>jobs.get(id)).filter(j=>j && (filter==='all' || j.status===filter));
+
+    // Clear and rebuild
+    const layer = waypointLayers[driverId]; layer.clearLayers();
+
+    const home = await geocode(d.homePostcode);
+    const depot = await geocode(depotPcInput.value || 'OX447RW');
+
+    const waypoints = [];
+    function add(lat,lng,label,letter,colour){
+      const m = L.marker([lat,lng], { icon: pin(letter, colour) }).bindTooltip(label);
+      m.addTo(layer); waypoints.push(L.latLng(lat,lng));
+    }
+
+    if(home) add(home.lat,home.lng, `${d.name} START`, 'H', '#333');
+
+    for(const j of todays){
+      const colour = statusColours[j.status] || '#374151';
+      if(j.plan==='collect_to_depot'){
+        if(j.collection_lat!=null) add(j.collection_lat,j.collection_lng, `Collection • ${j.collection_postcode}`, 'C', colour);
+        if(depot) add(depot.lat,depot.lng, `Depot • ${depotPcInput.value}`, 'D', '#111');
+      }else if(j.plan==='depot_to_delivery'){
+        if(depot) add(depot.lat,depot.lng, `Depot • ${depotPcInput.value}`, 'D', '#111');
+        if(j.delivery_lat!=null) add(j.delivery_lat,j.delivery_lng, `Delivery • ${j.delivery_postcode}`, 'L', colour);
+        if(j.part_exchange_postcode && j.collection_lat!=null){ add(j.collection_lat,j.collection_lng, `PX Return • ${j.part_exchange_postcode}`, 'P', colour); }
+      }else{ // same_day
+        if(j.collection_lat!=null) add(j.collection_lat,j.collection_lng, `Collection • ${j.collection_postcode}`, 'C', colour);
+        if(j.delivery_lat!=null) add(j.delivery_lat,j.delivery_lng, `Delivery • ${j.delivery_postcode}`, 'L', colour);
+        if(j.part_exchange_postcode && j.collection_lat!=null){ add(j.collection_lat,j.collection_lng, `PX Return • ${j.part_exchange_postcode}`, 'P', colour); }
+      }
+    }
+
+    if(home) add(home.lat,home.lng, `${d.name} END`, 'H', '#333');
+
+    routeCtrls[driverId].setWaypoints(waypoints);
+  }
+
+  function fitAll(){
+    const group = L.featureGroup([]);
+    for(const id in waypointLayers){ waypointLayers[id].eachLayer(l=>group.addLayer(l)); }
+    if(group.getLayers().length) map.fitBounds(group.getBounds().pad(0.2));
+  }
+
+  function renderPanel(){
+    const dateStr = new Date(dayInput.value).toDateString();
+    const depotList = depotQueue.map(jid=>jobListItem(jid)).join('');
+    panel.innerHTML = `<h3>${dateStr}</h3>
+      <div class="routeCard" data-depot>
+        <header><span>🛠 Oxford Depot</span><span class="lite">${depotPcInput.value}</span></header>
+        <ul class="jobs" data-driver="depot">${depotList}</ul>
+        <div class="meta">Drag from Depot to a driver to plan delivery legs.</div>
+      </div>`
+      + drivers.map(d=>{
+        const ids = assignments[d.id]||[];
+        const list = ids.map(jid=>jobListItem(jid,d.id)).join('');
+        const s = summaries[d.id] || {distance:0,duration:0,etas:[]};
+        const meta = s.distance? `${(s.distance/1000).toFixed(1)} km · ${fmtH(s.duration)}${s.etas.length? ' · first ETA '+etasPreview(s.etas): ''}` : '—';
+        return `<div class="routeCard" data-driver="${d.id}">
+          <header><span><span class="chip dot" style="background:${d.color}"></span>${d.name}</span>
+          <span class="meta">${meta}</span></header>
+          <ul class="jobs" data-driver="${d.id}">${list}</ul>
+          <div class="meta">Start/End: ${d.homePostcode}</div>
+        </div>`;
+      }).join('');
+  }
+
+  function jobListItem(jobId, driverId){
+    const j = jobs.get(jobId); if(!j) return '';
+    const colour = statusColours[j.status] || '#374151';
+    const badge = `<span class="badge" style="background:${colour}; color:#fff; border-color:${colour}">${j.status}</span>`;
+    const planSel = `<select data-plan data-id="${j.id}">
+      <option value="collect_to_depot" ${j.plan==='collect_to_depot'?'selected':''}>Plan: Collection → Depot</option>
+      <option value="depot_to_delivery" ${j.plan==='depot_to_delivery'?'selected':''}>Plan: Depot → Delivery</option>
+      <option value="same_day" ${j.plan==='same_day'?'selected':''}>Plan: Same-day C → D</option>
+    </select>`;
+    return `<li draggable="true" data-id="${j.id}" data-driver="${driverId||'depot'}">
+      <div>
+        <div><strong>${j.title}</strong></div>
+        <div class="lite">C: ${j.collection_postcode||'—'} · D: ${j.delivery_postcode||'—'} ${j.part_exchange_postcode? ' · PX: '+j.part_exchange_postcode:''}</div>
+      </div>
+      <div style="display:flex; gap:6px; align-items:center">${badge}${planSel}</div>
+    </li>`;
+  }
+
+  function etasPreview(etas){ const base = parseTime(startInput.value); return etas.length? fmtClock(addSeconds(base, etas[0])) : ''; }
+  function fmtH(sec){ const h=Math.floor(sec/3600), m=Math.round((sec%3600)/60); return `${h}h ${m}m`; }
+  function parseTime(t){ const [h,m]=t.split(':').map(Number); const d=new Date(); d.setHours(h,m,0,0); return d; }
+  function addSeconds(date,s){ return new Date(date.getTime()+s*1000); }
+  function fmtClock(d){ return d.toTimeString().slice(0,5); }
+
+  // Hooks
+  statusFilter.addEventListener('change', ()=>{ drivers.forEach(d=>drawDriver(d.id)); });
+  depotPcInput.addEventListener('change', ()=>{ drivers.forEach(d=>drawDriver(d.id)); });
+
+  // INITIAL RENDER (empty – waiting for your import)
+  drivers.forEach(d=>drawDriver(d.id));
+  renderPanel();
+})();
+</script>
+</body>
+</html>

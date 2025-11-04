@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Move Motorcycles – Job Status Map</title>
+  <title>Move Motorcycles – Status Map</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -20,21 +20,49 @@
   <style>
     html, body, #map { height: 100%; margin: 0; }
     :root { --navy:#040C34; --gold:#A08C59; }
+
     .toolbar {
       position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
       background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
       padding: 6px 10px; z-index: 1000; display: flex; gap: 8px; flex-wrap: wrap;
       font-family: system-ui, sans-serif;
     }
-    .toolbar button { background: var(--gold); color: #111; border: none; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
-    .status-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    .status-filters label { font-size: 12px; display: flex; align-items: center; gap: 4px; }
+    .toolbar button {
+      background: var(--gold); color: #111; border: none;
+      padding: 6px 10px; border-radius: 8px; cursor: pointer; font-weight: 600;
+    }
+    .status-filters {
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      background: #fafafa; border: 1px dashed #ddd; padding: 6px 8px; border-radius: 8px;
+    }
+    .status-filters label {
+      font-size: 12px; display: flex; align-items: center; gap: 4px;
+      background: white; border: 1px solid #eee; padding: 2px 6px; border-radius: 12px;
+    }
     .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-    .mm-pin { width:22px; height:22px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.2); display:flex; align-items:center; justify-content:center; color:#fff; font:bold 12px system-ui; }
+    .mm-pin {
+      width:22px; height:22px; border-radius:50%; border:2px solid #fff;
+      box-shadow:0 0 0 1px rgba(0,0,0,.2); display:flex; align-items:center;
+      justify-content:center; color:#fff; font:bold 12px system-ui;
+    }
+
+    /* Watermark */
+    .watermark{
+      position:fixed; inset:0; pointer-events:none; z-index:200; opacity:.25;
+      background-image:repeating-linear-gradient(-30deg,rgba(4,12,52,.08) 0,rgba(4,12,52,.08) 2px,transparent 2px,transparent 140px),
+                       repeating-linear-gradient(-30deg,transparent 0,transparent 140px,rgba(4,12,52,.08) 140px,rgba(4,12,52,.08) 142px)
+    }
+    .watermark::before{
+      content:"MOVE MOTORCYCLES MOVE MOTORCYCLES MOVE MOTORCYCLES";
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      font-weight:900; letter-spacing:.4em; font-size:40px; color:#040C34; opacity:.12; transform:rotate(-20deg)
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div class="watermark" aria-hidden="true"></div>
+
   <div class="toolbar">
     <button id="importCsvBtn">Import CSV</button>
     <input id="csvUpload" type="file" accept=".csv" style="display:none">
@@ -65,7 +93,7 @@
     return L.divIcon({className:'', html:`<div class="mm-pin" style="background:${colour}">${letter}</div>`, iconSize:[22,22], iconAnchor:[11,11]});
   }
 
-  // Extract UK postcode from address text
+  // Extract UK postcode
   function extractPostcode(text){
     if(!text) return '';
     const s = String(text).toUpperCase();
@@ -142,9 +170,7 @@
       }
     });
   });
-
 })();
 </script>
 </body>
 </html>
-``

@@ -22,80 +22,83 @@
   <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
   <style>
-    :root{ --navy:#040C34; --gold:#A08C59; }
-    html,body{height:100%;margin:0} #map{height:100%}
+    :root{ --navy:#040C34; --gold:#A08C59; --toolbar-bottom:70px; }
+    html,body{height:100%;margin:0}
+    #map{height:100%}
 
+    /* Toolbar */
     .toolbar{
-      position:fixed;z-index:1000;top:10px;left:50%;transform:translateX(-50%);
-      background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.12);
-      display:flex;gap:8px;align-items:center;padding:8px 10px;font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;flex-wrap:wrap
+      position:fixed; z-index:1000; top:10px; left:50%; transform:translateX(-50%);
+      background:#fff; border:1px solid #e5e7eb; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,.12);
+      display:flex; gap:8px; align-items:center; padding:8px 10px; font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      flex-wrap:wrap; max-width:min(1200px, 96vw)
     }
-    .toolbar select,.toolbar button,.toolbar input{height:36px;border-radius:10px;border:1px solid #e5e7eb;padding:0 10px;font-weight:600}
-    .toolbar button{background:var(--gold);color:#111;border:none;cursor:pointer}
-    .toolbar button.secondary{background:#fff;color:#111;border:1px solid #d1d5db}
-    .toolbar label{ font-size:12px; color:#374151; margin-right:4px; }
-    .toolbar .divider{width:1px;height:24px;background:#e5e7eb;margin:0 6px;border-radius:1px}
+    .toolbar select,.toolbar button,.toolbar input[type="time"], .toolbar input[type="date"], .toolbar input[type="text"]{
+      height:36px; border-radius:10px; border:1px solid #e5e7eb; padding:0 10px; font-weight:600
+    }
+    .toolbar button{ background:var(--gold); color:#111; border:none; cursor:pointer }
+    .toolbar button.secondary{ background:#fff; color:#111; border:1px solid #d1d5db }
+    .toolbar label{ font-size:12px; color:#374151; margin-right:4px }
+    .toolbar .divider{width:1px; height:24px; background:#e5e7eb; margin:0 6px; border-radius:1px}
 
+    /* Status checkbox group */
+    .status-group{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:6px 8px; border:1px dashed #e5e7eb; border-radius:10px; background:#fafafa; }
+    .status-group label{ display:flex; align-items:center; gap:6px; font-size:12px; padding:2px 6px; border-radius:999px; border:1px solid #e5e7eb; background:#fff; }
+
+    /* Right panel sits under toolbar */
     .panel{
-      position:fixed;right:10px;top:70px;bottom:10px;width:420px;background:#fff;border:1px solid #e5e7eb;border-radius:16px;
-      box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:900;overflow:auto;font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif
+      position:fixed; right:10px; top:calc(var(--toolbar-bottom) + 10px); bottom:10px; width:420px;
+      background:#fff; border:1px solid #e5e7eb; border-radius:16px;
+      box-shadow:0 8px 24px rgba(0,0,0,.12); z-index:900; overflow:auto;
+      font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     }
-    .panel h3{margin:14px 14px 6px;font-size:16px;color:var(--navy)}
-    .panel .routeCard{margin:10px 12px;padding:10px;border:1px solid #e5e7eb;border-radius:12px}
-    .panel .routeCard header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:700;gap:6px}
-    .panel .meta{font-size:12px;color:#374151}
-    .panel .jobs{list-style:none;margin:8px 0 0;padding:0;min-height:12px}
-    .panel .jobs li{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px dashed #e5e7eb;border-radius:10px;margin-bottom:6px;background:#fafafa;justify-content:space-between}
-    .panel .jobs li[draggable="true"]{cursor:grab}
-    .panel .jobs.dragover{outline:2px dashed var(--gold);background:#fff}
-    .badge{font-size:11px;padding:2px 6px;border-radius:999px;border:1px solid #e5e7eb;background:#f9fafb}
-    .lite{font-size:12px;color:#6b7280}
-    .chip.dot{width:12px;height:12px;border-radius:999px;display:inline-block;vertical-align:middle;margin-right:6px;border:1px solid rgba(0,0,0,.12)}
-    .mm-pin{width:20px;height:20px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;font:bold 11px/1 system-ui;color:#fff}
+    .panel h3{ margin:14px 14px 6px; font-size:16px; color:var(--navy) }
+    .panel .routeCard{ margin:10px 12px; padding:10px; border:1px solid #e5e7eb; border-radius:12px }
+    .panel .routeCard header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-weight:700; gap:6px }
+    .panel .meta{ font-size:12px; color:#374151 }
+    .panel .jobs{ list-style:none; margin:8px 0 0; padding:0; min-height:12px }
+    .panel .jobs li{ display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px dashed #e5e7eb; border-radius:10px; margin-bottom:6px; background:#fafafa; justify-content:space-between }
+    .panel .jobs li[draggable="true"]{ cursor:grab }
+    .panel .jobs.dragover{ outline:2px dashed var(--gold); background:#fff }
+    .badge{ font-size:11px; padding:2px 6px; border-radius:999px; border:1px solid #e5e7eb; background:#f9fafb }
+    .lite{ font-size:12px; color:#6b7280 }
+    .chip.dot{ width:12px; height:12px; border-radius:999px; display:inline-block; vertical-align:middle; margin-right:6px; border:1px solid rgba(0,0,0,.12) }
+    .mm-pin{ width:20px; height:20px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.2); display:flex; align-items:center; justify-content:center; font:bold 11px/1 system-ui; color:#fff }
 
-    /* Fixed diagonal watermark, 0.25 opacity, under vectors */
+    /* Watermark */
     .watermark{
-      position:fixed;inset:0;pointer-events:none;z-index:200;opacity:.25;
+      position:fixed; inset:0; pointer-events:none; z-index:200; opacity:.25;
       background-image:repeating-linear-gradient(-30deg,rgba(4,12,52,.08) 0,rgba(4,12,52,.08) 2px,transparent 2px,transparent 140px),
                        repeating-linear-gradient(-30deg,transparent 0,transparent 140px,rgba(4,12,52,.08) 140px,rgba(4,12,52,.08) 142px)
     }
     .watermark::before{
       content:"MOVE MOTORCYCLES MOVE MOTORCYCLES MOVE MOTORCYCLES";
-      position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-      font-weight:900;letter-spacing:.4em;font-size:40px;color:#040C34;opacity:.12;transform:rotate(-20deg)
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      font-weight:900; letter-spacing:.4em; font-size:40px; color:#040C34; opacity:.12; transform:rotate(-20deg)
     }
 
-    .leaflet-routing-container{display:none}
-    .leaflet-routing-line{stroke:#040C34!important;stroke-width:3px!important}
+    .leaflet-routing-container{ display:none }
+    .leaflet-routing-line{ stroke:#040C34!important; stroke-width:3px!important }
+
+    @media (max-width: 900px){
+      .panel{ width: min(420px, 96vw); right: 4px; }
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div class="watermark" aria-hidden="true"></div>
 
-  <div class="toolbar">
+  <!-- Toolbar -->
+  <div class="toolbar" id="toolbar">
     <label for="day">Date:</label>
     <input id="day" type="date" />
     <div class="divider"></div>
 
-    <label for="start">Start time:</label>
+    <label for="start">Start:</label>
     <input id="start" type="time" value="08:00" />
     <div class="divider"></div>
 
-    <label>Status:</label>
-    <select id="statusFilter">
-      <option value="all">All</option>
-      <option>Pick up Request</option>
-      <option>Booking received</option>
-      <option>Driver assigned for collection</option>
-      <option>Collected</option>
-      <option>Driver assigned for delivery</option>
-      <option>Delivered</option>
-      <option>Review</option>
-      <option>Review not requested</option>
-    </select>
-
-    <div class="divider"></div>
     <label for="depotPc">Depot:</label>
     <input id="depotPc" value="OX447RW" />
 
@@ -104,13 +107,28 @@
     <input id="csvUpload" type="file" accept=".csv" style="display:none" />
 
     <button id="exportBtn">Export day (GeoJSON)</button>
+
+    <!-- Status checkboxes -->
+    <div class="divider"></div>
+    <div class="status-group" id="statusGroup">
+      <label><input type="checkbox" data-status="all" checked>All</label>
+      <label><input type="checkbox" data-status="Pick up Request" checked><span style="width:10px;height:10px;background:#de3323;border-radius:50%;display:inline-block"></span>Pick up</label>
+      <label><input type="checkbox" data-status="Booking received" checked><span style="width:10px;height:10px;background:#2e22f4;border-radius:50%;display:inline-block"></span>Booking</label>
+      <label><input type="checkbox" data-status="Driver assigned for collection" checked><span style="width:10px;height:10px;background:#ecd0a7;border-radius:50%;display:inline-block"></span>Assigned (C)</label>
+      <label><input type="checkbox" data-status="Collected" checked><span style="width:10px;height:10px;background:#eaa83d;border-radius:50%;display:inline-block"></span>Collected</label>
+      <label><input type="checkbox" data-status="Driver assigned for delivery" checked><span style="width:10px;height:10px;background:#ecd0a7;border-radius:50%;display:inline-block"></span>Assigned (D)</label>
+      <label><input type="checkbox" data-status="Delivered" checked><span style="width:10px;height:10px;background:#38651d;border-radius:50%;display:inline-block"></span>Delivered</label>
+      <label><input type="checkbox" data-status="Review" checked>Review</label>
+      <label><input type="checkbox" data-status="Review not requested" checked>Review NR</label>
+    </div>
   </div>
 
+  <!-- Drivers / Depot panel -->
   <aside class="panel" id="panel"></aside>
 
 <script>
 (function(){
-  // Drivers (with your home postcodes)
+  // ----- Drivers
   const drivers = [
     { id:"mark",  name:"Mark",  color:'#1f77b4', homePostcode:'WS137JY' },
     { id:"keith", name:"Keith", color:'#ff7f0e', homePostcode:'RG45BZ' },
@@ -122,51 +140,57 @@
     { id:"spare", name:"Spare", color:'#7f7f7f', homePostcode:'OX447RW' },
   ];
 
-  // Status → marker colours
+  // Status colours
   const statusColours = {
     'Pick up Request': '#de3323',
     'Booking received': '#2e22f4',
     'Driver assigned for delivery': '#ecd0a7',
     'Collected': '#eaa83d',
     'Delivered': '#38651d',
-    'Driver assigned for collection': '#ecd0a7'
+    'Driver assigned for collection': '#ecd0a7',
+    'Review': '#6b7280',
+    'Review not requested': '#6b7280'
   };
 
   // Map
   const map = L.map('map', { zoomSnap:0.5, zoomDelta:0.5 }).setView([52.8,-1.6], 6);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'&copy; OpenStreetMap' }).addTo(map);
 
-  // State
-  const JOB_STATUSES = ['Pick up Request','Booking received','Driver assigned for collection','Collected','Driver assigned for delivery','Delivered','Review','Review not requested'];
+  // Elements/state
+  const toolbar = document.getElementById('toolbar');
+  const panel   = document.getElementById('panel');
   const dayInput = document.getElementById('day'); dayInput.valueAsDate = new Date();
   const startInput = document.getElementById('start');
-  const statusFilter = document.getElementById('statusFilter');
   const depotPcInput = document.getElementById('depotPc');
-  const panel = document.getElementById('panel');
+  const statusGroup = document.getElementById('statusGroup');
 
-  const jobs = new Map();            // id -> job
-  const assignments = {};            // driverId -> [jobIds]
-  const depotQueue = [];             // [jobIds]
-  const waypointLayers = {};         // driverId -> markerClusterGroup
-  const routeCtrls = {};             // driverId -> L.Routing.Control
-  const summaries = {};              // driverId -> {distance,duration}
+  const jobs = new Map();     // id -> job
+  const assignments = {};     // driverId -> jobIds
+  const depotQueue = [];      // jobIds staged/holding
+  const waypointLayers = {};  // driverId -> cluster group
+  const routeCtrls = {};      // driverId -> routing control
+  const summaries = {};       // driverId -> {distance,duration}
   const osrmRoute = 'https://router.project-osrm.org/route/v1';
 
-  // Per-driver cluster groups + routing controls
+  // One marker layer that shows ALL pins (requested behaviour)
+  const pinsLayer = L.markerClusterGroup({
+    showCoverageOnHover:false, spiderfyOnEveryZoom:true, maxClusterRadius:40
+  }).addTo(map);
+
+  // Keep only one hidden CSV input
+  if (document.querySelectorAll('#csvUpload').length > 1) {
+    document.querySelectorAll('#csvUpload').forEach((n,i)=>{ if(i>0) n.remove(); });
+  }
+
+  // Build per-driver groups/controls (kept for routes/panel; pinsLayer is independent)
   drivers.forEach(d=>{
     assignments[d.id] = [];
-    waypointLayers[d.id] = L.markerClusterGroup({
-      showCoverageOnHover:false,
-      spiderfyOnEveryZoom:true,
-      maxClusterRadius:40
-    }).addTo(map);
-
+    waypointLayers[d.id] = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnEveryZoom:true, maxClusterRadius:40 }).addTo(map);
     routeCtrls[d.id] = L.Routing.control({
       router: L.Routing.osrmv1({ serviceUrl: osrmRoute }),
       waypoints: [], addWaypoints:false, routeWhileDragging:false, show:false, draggableWaypoints:false,
       lineOptions:{ styles:[{ color:d.color, weight:3, opacity:0.95 }] }
     }).addTo(map);
-
     routeCtrls[d.id].on('routesfound', e=>{
       const r = e.routes[0];
       summaries[d.id] = { distance: r.summary.totalDistance, duration: r.summary.totalTime };
@@ -175,13 +199,42 @@
   });
 
   // Helpers
+  function setPanelTopUnderToolbar(){
+    const rect = toolbar.getBoundingClientRect();
+    const bottom = Math.max(rect.bottom, 60);
+    document.documentElement.style.setProperty('--toolbar-bottom', bottom + 'px');
+  }
+  setPanelTopUnderToolbar(); window.addEventListener('resize', setPanelTopUnderToolbar);
+
   function pin(letter, colour){
     return L.divIcon({ className:'', html:`<div class="mm-pin" style="background:${colour}">${letter}</div>`, iconSize:[20,20], iconAnchor:[10,10] });
   }
   function fmtH(sec){ const h=Math.floor(sec/3600), m=Math.round((sec%3600)/60); return `${h}h ${m}m`; }
-  function parseISODate(s){ const d = new Date(s); d.setHours(0,0,0,0); return d; }
   function selectedDay(){ const d = new Date(dayInput.value); d.setHours(0,0,0,0); return d; }
-  function isReady(j){ if(!j.ready_date) return true; return parseISODate(j.ready_date).getTime() <= selectedDay().getTime(); }
+  function isReady(j){ if(!j.ready_date) return true; const d=new Date(j.ready_date); d.setHours(0,0,0,0); return d.getTime() <= selectedDay().getTime(); }
+  function addMarkerTo(layer, lat, lng, label, letter, colour){
+    const m = L.marker([lat,lng], { icon: pin(letter, colour) }).bindTooltip(label);
+    layer.addLayer(m);
+  }
+
+  // Status checkbox logic
+  function getSelectedStatuses(){
+    const all = statusGroup.querySelector('input[data-status="all"]');
+    const items = [...statusGroup.querySelectorAll('input[type="checkbox"][data-status]:not([data-status="all"])')];
+    if(all.checked) return new Set(items.map(i=>i.dataset.status));
+    return new Set(items.filter(i=>i.checked).map(i=>i.dataset.status));
+  }
+  statusGroup.addEventListener('change', (e)=>{
+    if(e.target.matches('input[data-status="all"]')){
+      const on = e.target.checked;
+      statusGroup.querySelectorAll('input[type="checkbox"][data-status]:not([data-status="all"])').forEach(cb=> cb.checked = on);
+    }else{
+      const items = [...statusGroup.querySelectorAll('input[type="checkbox"][data-status]:not([data-status="all"])')];
+      const all = statusGroup.querySelector('input[data-status="all"]');
+      all.checked = items.every(i=>i.checked);
+    }
+    drawAllPins();
+  });
 
   // Import JSON
   document.getElementById('importJsonBtn').onclick = async ()=>{
@@ -190,14 +243,12 @@
     try{
       const arr = JSON.parse(text);
       for(const j of arr){ const id=await upsertJob(j); if(!depotQueue.includes(id)) depotQueue.push(id); }
-      renderPanel(); drivers.forEach(d=>drawDriver(d.id)); fitAll();
+      renderPanel(); drivers.forEach(d=>drawDriver(d.id)); drawAllPins(); fitAll();
     }catch(err){ alert('Import failed: '+err.message); }
   };
 
-  // Import CSV (button + hidden file input)
-  document.getElementById('importCsvBtn').addEventListener('click', ()=>{
-    document.getElementById('csvUpload').click();
-  });
+  // Import CSV
+  document.getElementById('importCsvBtn').addEventListener('click', ()=> document.getElementById('csvUpload').click());
   document.getElementById('csvUpload').addEventListener('change', async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
     const text = await file.text();
@@ -205,13 +256,7 @@
     if (lines.length < 2) { alert('CSV appears empty.'); e.target.value=''; return; }
 
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-    const get = (row, keys) => {
-      for (const k of keys) {
-        const i = headers.indexOf(k);
-        if (i > -1 && row[i] != null) return row[i].trim();
-      }
-      return '';
-    };
+    const get = (row, keys) => { for (const k of keys) { const i = headers.indexOf(k); if (i > -1 && row[i] != null) return row[i].trim(); } return ''; };
 
     let imported = 0;
     for (let i = 1; i < lines.length; i++) {
@@ -232,7 +277,7 @@
       imported++;
     }
 
-    renderPanel(); drivers.forEach(d=>drawDriver(d.id)); fitAll();
+    renderPanel(); drivers.forEach(d=>drawDriver(d.id)); drawAllPins(); fitAll();
     alert(`Imported ${imported} jobs from CSV.`);
     e.target.value = '';
   });
@@ -265,7 +310,7 @@
     saveAs(blob, `move-routes-${dayInput.value}.geojson`);
   };
 
-  // Upsert a job; geocode missing lat/lng; keep ready_date
+  // Upsert + geocode
   async function upsertJob(job){
     const id = job.id || crypto.randomUUID();
     const norm = {
@@ -275,7 +320,7 @@
       delivery_postcode: job.delivery_postcode || '',
       part_exchange_postcode: job.part_exchange_postcode || '',
       status: job.status || 'Booking received',
-      plan: job.plan || inferPlan(job), // 'collect_to_depot' | 'depot_to_delivery' | 'same_day'
+      plan: job.plan || inferPlan(job),
       ready_date: job.ready_date || '',
       collection_lat: job.collection_lat, collection_lng: job.collection_lng,
       delivery_lat: job.delivery_lat, delivery_lng: job.delivery_lng,
@@ -308,20 +353,37 @@
   }
 
   function assign(driverId, jobId){ if(!assignments[driverId].includes(jobId)) assignments[driverId].push(jobId); drawDriver(driverId); }
-  function unassign(jobId){
-    for(const id in assignments){ const i=assignments[id].indexOf(jobId); if(i>-1){ assignments[id].splice(i,1); drawDriver(id);} }
-    const d = depotQueue.indexOf(jobId); if(d>-1) depotQueue.splice(d,1);
+
+  // Draw all pins (ALL jobs; filtered by status checkboxes + ready_date)
+  function drawAllPins(){
+    pinsLayer.clearLayers();
+    const selectedStatuses = getSelectedStatuses();
+    const isSelected = (st)=> selectedStatuses.has(st);
+
+    for(const [,j] of jobs){
+      if(!isReady(j)) continue;
+      if(!isSelected(j.status)) continue;
+
+      const colour = statusColours[j.status] || '#374151';
+      if(j.plan==='collect_to_depot'){
+        if(j.collection_lat!=null) addMarkerTo(pinsLayer, j.collection_lat, j.collection_lng, `Collection • ${j.collection_postcode}`, 'C', colour);
+      }else if(j.plan==='depot_to_delivery'){
+        if(j.delivery_lat!=null)   addMarkerTo(pinsLayer, j.delivery_lat,   j.delivery_lng,   `Delivery • ${j.delivery_postcode}`,   'L', colour);
+      }else{ // same_day
+        if(j.collection_lat!=null) addMarkerTo(pinsLayer, j.collection_lat, j.collection_lng, `Collection • ${j.collection_postcode}`, 'C', colour);
+        if(j.delivery_lat!=null)   addMarkerTo(pinsLayer, j.delivery_lat,   j.delivery_lng,   `Delivery • ${j.delivery_postcode}`,   'L', colour);
+      }
+    }
   }
 
-  // Draw per driver with ready_date filter and clusters
+  // Draw per driver (routes) – unchanged
   async function drawDriver(driverId){
     const d = drivers.find(x=>x.id===driverId);
     const layer = waypointLayers[driverId]; layer.clearLayers();
 
     const todays = (assignments[driverId]||[])
       .map(id=>jobs.get(id))
-      .filter(j=>j && (statusFilter.value==='all' || j.status===statusFilter.value))
-      .filter(isReady);
+      .filter(j=>j && isReady(j));
 
     const home = await geocode(d.homePostcode);
     const depot = await geocode(depotPcInput.value || 'OX447RW');
@@ -337,14 +399,14 @@
     for(const j of todays){
       const colour = statusColours[j.status] || '#374151';
       if(j.plan==='collect_to_depot'){
-        if(j.collection_lat!=null) add(j.collection_lat,j.collection_lng, `Collection • ${j.collection_postcode}${j.ready_date? ' • 📅 '+j.ready_date:''}`, 'C', colour);
+        if(j.collection_lat!=null) add(j.collection_lat,j.collection_lng, `Collection • ${j.collection_postcode}`, 'C', colour);
         if(depot) add(depot.lat,depot.lng, `Depot • ${depotPcInput.value}`, 'D', '#111');
       }else if(j.plan==='depot_to_delivery'){
         if(depot) add(depot.lat,depot.lng, `Depot • ${depotPcInput.value}`, 'D', '#111');
-        if(j.delivery_lat!=null) add(j.delivery_lat,j.delivery_lng, `Delivery • ${j.delivery_postcode}${j.ready_date? ' • 📅 '+j.ready_date:''}`, 'L', colour);
+        if(j.delivery_lat!=null) add(j.delivery_lat,j.delivery_lng, `Delivery • ${j.delivery_postcode}`, 'L', colour);
         if(j.part_exchange_postcode && j.collection_lat!=null){ add(j.collection_lat,j.collection_lng, `PX Return • ${j.part_exchange_postcode}`, 'P', colour); }
-      }else{ // same_day
-        if(j.collection_lat!=null) add(j.collection_lat,j.collection_lng, `Collection • ${j.collection_postcode}${j.ready_date? ' • 📅 '+j.ready_date:''}`, 'C', colour);
+      }else{
+        if(j.collection_lat!=null) add(j.collection_lat,j.collection_lng, `Collection • ${j.collection_postcode}`, 'C', colour);
         if(j.delivery_lat!=null) add(j.delivery_lat,j.delivery_lng, `Delivery • ${j.delivery_postcode}`, 'L', colour);
         if(j.part_exchange_postcode && j.collection_lat!=null){ add(j.collection_lat,j.collection_lng, `PX Return • ${j.part_exchange_postcode}`, 'P', colour); }
       }
@@ -354,15 +416,19 @@
     routeCtrls[driverId].setWaypoints(waypoints);
   }
 
+  // Fit map to everything currently plotted (pins + driver layers)
   function fitAll(){
     const group = L.featureGroup([]);
+    pinsLayer.eachLayer(l=>group.addLayer(l));
     for(const id in waypointLayers){ waypointLayers[id].eachLayer(l=>group.addLayer(l)); }
     if(group.getLayers().length) map.fitBounds(group.getBounds().pad(0.2));
   }
 
+  // Panel (kept as-is for planning)
   function renderPanel(){
     const dateStr = new Date(dayInput.value).toDateString();
     const depotList = depotQueue.map(jid=>jobListItem(jid)).join('');
+
     panel.innerHTML = `<h3>${dateStr}</h3>
       <div class="routeCard" data-depot>
         <header><span>🛠 Oxford Depot</span><span class="lite">${depotPcInput.value}</span></header>
@@ -382,7 +448,7 @@
         </div>`;
       }).join('');
 
-    // Wire up drag & drop (Depot ⇄ Drivers)
+    // Drag/drop wiring
     panel.querySelectorAll('.jobs li[draggable="true"]').forEach(li=>{
       li.addEventListener('dragstart', (e)=>{ e.dataTransfer.setData('text/plain', JSON.stringify({ jobId: li.dataset.id, from: li.dataset.driver })); });
     });
@@ -399,18 +465,10 @@
         if(to==='depot'){ if(!depotQueue.includes(jobId)) depotQueue.push(jobId); }
         else { if(!assignments[to].includes(jobId)) assignments[to].push(jobId); drawDriver(to); }
         renderPanel();
+        drawAllPins(); // keep the global pins layer up to date
       });
     });
-
-    // Status cycle & plan mode select
-    panel.querySelectorAll('button[data-action="status"]').forEach(btn=>{
-      btn.onclick = ()=>{ const j = jobs.get(btn.dataset.id); if(!j) return; const i = Math.max(0, JOB_STATUSES.indexOf(j.status)); j.status = JOB_STATUSES[(i+1)%JOB_STATUSES.length]; renderPanel(); drivers.forEach(d=>drawDriver(d.id)); };
-    });
-    panel.querySelectorAll('select[data-plan]').forEach(sel=>{
-      sel.onchange = ()=>{ const j = jobs.get(sel.dataset.id); if(!j) return; j.plan = sel.value; renderPanel(); drivers.forEach(d=>drawDriver(d.id)); };
-    });
   }
-
   function jobListItem(jobId, driverId){
     const j = jobs.get(jobId); if(!j) return '';
     const colour = statusColours[j.status] || '#374151';
@@ -431,13 +489,14 @@
   }
 
   // Hooks
-  dayInput.addEventListener('change', ()=>{ drivers.forEach(d=>drawDriver(d.id)); renderPanel(); });
-  statusFilter.addEventListener('change', ()=>{ drivers.forEach(d=>drawDriver(d.id)); });
-  depotPcInput.addEventListener('change', ()=>{ drivers.forEach(d=>drawDriver(d.id)); });
+  dayInput.addEventListener('change', ()=>{ drivers.forEach(d=>drawDriver(d.id)); renderPanel(); drawAllPins(); setPanelTopUnderToolbar(); });
+  depotPcInput.addEventListener('change', ()=>{ drivers.forEach(d=>drawDriver(d.id)); drawAllPins(); });
 
-  // Initial (empty) render
+  // Initial render
   drivers.forEach(d=>drawDriver(d.id));
   renderPanel();
+  drawAllPins();
+  fitAll();
 })();
 </script>
 </body>

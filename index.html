@@ -349,6 +349,36 @@
   drivers.forEach(d=>drawDriver(d.id));
   renderPanel();
 })();
+  // --- Simple CSV import (no external libraries) ---
+document.getElementById('csvUpload').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const lines = text.trim().split(/\r?\n/);
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(',');
+    const row = Object.fromEntries(headers.map((h, j) => [h, values[j]?.trim() || '']));
+    const job = {
+      id: row.id || crypto.randomUUID(),
+      title: row.title || `${row.collection_postcode || ''} → ${row.delivery_postcode || ''}`,
+      collection_postcode: row.collection_postcode || '',
+      delivery_postcode: row.delivery_postcode || '',
+      part_exchange_postcode: row.part_exchange_postcode || '',
+      status: row.status || 'Booking received',
+      plan: row.plan || 'same_day'
+    };
+    const newId = await upsertJob(job);
+    depotQueue.push(newId); // you can change to assign() if you prefer
+  }
+
+  renderPanel();
+  drivers.forEach(d => drawDriver(d.id));
+  fitAll();
+  alert("CSV imported successfully.");
+});
+
 </script>
 </body>
 </html>

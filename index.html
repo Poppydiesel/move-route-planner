@@ -100,7 +100,7 @@ const WatermarkLayer = L.Layer.extend({
     if (this._div && this._div.parentNode) {
       this._div.parentNode.removeChild(this._div);
     }
-  },
+
   _update: function() {
     if (!this._div) return;
     const size = this._map.getSize();

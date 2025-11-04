@@ -21,7 +21,7 @@
     html, body, #map { height: 100%; margin: 0; }
     :root { --navy:#040C34; --gold:#A08C59; }
 
-    /* Bottom toolbar */
+    /* Bottom gold bar */
     .bottom-bar {
       position: fixed; bottom: 0; left: 0; width: 100%; height: 50px;
       background: rgba(160,140,89,0.9);
@@ -37,13 +37,12 @@
     .status-chips::-webkit-scrollbar { display: none; }
     .chip {
       display: flex; align-items: center; gap: 4px;
-      padding: 4px 8px; border-radius: 20px; background: rgba(255,255,255,0.8);
+      padding: 4px 8px; border-radius: 20px; background: rgba(255,255,255,0.85);
       color: var(--navy); cursor: pointer; white-space: nowrap; font-weight: 600;
       border: 1px solid rgba(0,0,0,0.1);
+      user-select: none;
     }
-    .chip .dot {
-      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-    }
+    .chip .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
     .chip.off { opacity: 0.4; }
 
     .import-btn {
@@ -51,29 +50,27 @@
       padding: 6px 12px; font-weight: 700; cursor: pointer;
     }
 
-    /* Pins */
+    /* Pin design */
     .mm-pin {
       width:22px; height:22px; border-radius:50%; border:2px solid #fff;
       box-shadow:0 0 0 1px rgba(0,0,0,.2); display:flex; align-items:center;
       justify-content:center; color:#fff; font:bold 12px system-ui;
     }
 
-    /* Proper watermark layering for Move Motorcycles style */
-.leaflet-tile-pane::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: url('Move Motorcycles Blue.png');
-  background-repeat: repeat;
-  background-size: 220px auto;
-  opacity: 0.25;
-  transform: rotate(-25deg);
-  transform-origin: center center;
-  pointer-events: none;
-  z-index: 2; /* sits above tiles but below vectors */
-}
-
-    
+    /* Correct watermark layer (under markers, above tiles) */
+    .leaflet-tile-pane::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: url('Move Motorcycles Blue.png');
+      background-repeat: repeat;
+      background-size: 220px auto;
+      opacity: 0.25;
+      transform: rotate(-25deg);
+      transform-origin: center center;
+      pointer-events: none;
+      z-index: 2; /* sits above tiles but below markers */
+    }
   </style>
 </head>
 <body>
@@ -108,7 +105,12 @@
   const activeStatuses = new Set(Object.keys(statusColours));
 
   function makeIcon(letter, colour){
-    return L.divIcon({className:'', html:`<div class="mm-pin" style="background:${colour}">${letter}</div>`, iconSize:[22,22], iconAnchor:[11,11]});
+    return L.divIcon({
+      className:'',
+      html:`<div class="mm-pin" style="background:${colour}">${letter}</div>`,
+      iconSize:[22,22],
+      iconAnchor:[11,11]
+    });
   }
 
   // Extract UK postcode from address
@@ -168,7 +170,7 @@
     if(markers.getLayers().length) map.fitBounds(markers.getBounds().pad(0.2));
   }
 
-  // Import CSV
+  // CSV import
   document.getElementById('importCsvBtn').onclick = ()=> document.getElementById('csvUpload').click();
   document.getElementById('csvUpload').addEventListener('change', e=>{
     const file = e.target.files?.[0];

@@ -75,29 +75,41 @@
   const map = L.map('map').setView([52.8, -1.6], 6);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
 
-  // --- Move Motorcycles watermark (robust version) ---
-function addWatermark() {
-  const overlayPane = map.getPanes().overlayPane;
-  // Remove any existing watermark
-  const existing = overlayPane.querySelector('.move-watermark');
-  if (existing) overlayPane.removeChild(existing);
+// --- Move Motorcycles watermark layer (guaranteed method) ---
+const WatermarkLayer = L.Layer.extend({
+  onAdd: function(map) {
+    const pane = map.getPanes().overlayPane;
+    const div = L.DomUtil.create('div', 'move-watermark', pane);
+    Object.assign(div.style, {
+      position: 'absolute',
+      top: 0, left: 0, right: 0, bottom: 0,
+      backgroundImage: "url('Move%20Motorcycles%20Blue.png')",
+      backgroundRepeat: 'repeat',
+      backgroundSize: '220px auto',
+      opacity: 0.25,
+      transform: 'rotate(-25deg)',
+      transformOrigin: 'center center',
+      pointerEvents: 'none'
+    });
+    this._div = div;
+    map.on('move zoom', this._update, this);
+    this._update();
+  },
+  onRemove: function(map) {
+    map.off('move zoom', this._update, this);
+    if (this._div && this._div.parentNode) {
+      this._div.parentNode.removeChild(this._div);
+    }
+  },
+  _update: function() {
+    if (!this._div) return;
+    const size = this._map.getSize();
+    this._div.style.width = size.x + 'px';
+    this._div.style.height = size.y + 'px';
+  }
+});
+new WatermarkLayer().addTo(map);
 
-  const watermark = L.DomUtil.create('div', 'move-watermark', overlayPane);
-  Object.assign(watermark.style, {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundImage: "url('Move%20Motorcycles%20Blue.png')",
-    backgroundRepeat: 'repeat',
-    backgroundSize: '220px auto',
-    opacity: 0.25,
-    transform: 'rotate(-25deg)',
-    transformOrigin: 'center center',
-    pointerEvents: 'none',
-    zIndex: 2
-  });
-}
-map.whenReady(addWatermark);
-map.on('layeradd', addWatermark);
 
   // --- Marker cluster layer ---
   const markers = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnEveryZoom:true });

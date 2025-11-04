@@ -14,48 +14,59 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-  <!-- PapaParse for CSV -->
+  <!-- PapaParse -->
   <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 
   <style>
     html, body, #map { height: 100%; margin: 0; }
     :root { --navy:#040C34; --gold:#A08C59; }
 
-    .toolbar {
-      position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
-      background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-      padding: 6px 10px; z-index: 1000; display: flex; gap: 8px; flex-wrap: wrap;
-      font-family: system-ui, sans-serif;
+    /* Bottom toolbar */
+    .bottom-bar {
+      position: fixed; bottom: 0; left: 0; width: 100%; height: 50px;
+      background: rgba(160,140,89,0.9);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 12px; box-sizing: border-box;
+      font-family: system-ui, sans-serif; font-size: 14px;
+      z-index: 1000;
     }
-    .toolbar button {
-      background: var(--gold); color: #111; border: none;
-      padding: 6px 10px; border-radius: 8px; cursor: pointer; font-weight: 600;
+    .status-chips {
+      display: flex; flex-wrap: nowrap; gap: 10px; overflow-x: auto;
+      scrollbar-width: none; -ms-overflow-style: none;
     }
-    .status-filters {
-      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-      background: #fafafa; border: 1px dashed #ddd; padding: 6px 8px; border-radius: 8px;
+    .status-chips::-webkit-scrollbar { display: none; }
+    .chip {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px 8px; border-radius: 20px; background: rgba(255,255,255,0.8);
+      color: var(--navy); cursor: pointer; white-space: nowrap; font-weight: 600;
+      border: 1px solid rgba(0,0,0,0.1);
     }
-    .status-filters label {
-      font-size: 12px; display: flex; align-items: center; gap: 4px;
-      background: white; border: 1px solid #eee; padding: 2px 6px; border-radius: 12px;
+    .chip .dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
     }
-    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .chip.off { opacity: 0.4; }
+
+    .import-btn {
+      background: #fff; color: var(--navy); border: none; border-radius: 8px;
+      padding: 6px 12px; font-weight: 700; cursor: pointer;
+    }
+
+    /* Pins */
     .mm-pin {
       width:22px; height:22px; border-radius:50%; border:2px solid #fff;
       box-shadow:0 0 0 1px rgba(0,0,0,.2); display:flex; align-items:center;
       justify-content:center; color:#fff; font:bold 12px system-ui;
     }
 
-    /* Watermark */
-    .watermark{
-      position:fixed; inset:0; pointer-events:none; z-index:200; opacity:.25;
-      background-image:repeating-linear-gradient(-30deg,rgba(4,12,52,.08) 0,rgba(4,12,52,.08) 2px,transparent 2px,transparent 140px),
-                       repeating-linear-gradient(-30deg,transparent 0,transparent 140px,rgba(4,12,52,.08) 140px,rgba(4,12,52,.08) 142px)
-    }
-    .watermark::before{
-      content:"MOVE MOTORCYCLES MOVE MOTORCYCLES MOVE MOTORCYCLES";
-      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-      font-weight:900; letter-spacing:.4em; font-size:40px; color:#040C34; opacity:.12; transform:rotate(-20deg)
+    /* Watermark using Move Motorcycles Blue logo */
+    .watermark {
+      position: fixed; inset: 0; z-index: 200; pointer-events: none;
+      background-image: url('Move Motorcycles Blue.png');
+      background-repeat: repeat;
+      background-size: 220px auto;
+      opacity: 0.25;
+      transform: rotate(-25deg);
+      transform-origin: center center;
     }
   </style>
 </head>
@@ -63,16 +74,18 @@
   <div id="map"></div>
   <div class="watermark" aria-hidden="true"></div>
 
-  <div class="toolbar">
-    <button id="importCsvBtn">Import CSV</button>
-    <input id="csvUpload" type="file" accept=".csv" style="display:none">
-    <div class="status-filters" id="statusFilters"></div>
+  <div class="bottom-bar">
+    <div class="status-chips" id="statusChips"></div>
+    <div>
+      <button class="import-btn" id="importCsvBtn">Import CSV</button>
+      <input id="csvUpload" type="file" accept=".csv" style="display:none">
+    </div>
   </div>
 
 <script>
 (function(){
   const map = L.map('map').setView([52.8, -1.6], 6);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
 
   const markers = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnEveryZoom:true });
   map.addLayer(markers);
@@ -87,13 +100,13 @@
   };
 
   const jobs = [];
-  let activeStatuses = new Set(Object.keys(statusColours));
+  const activeStatuses = new Set(Object.keys(statusColours));
 
   function makeIcon(letter, colour){
     return L.divIcon({className:'', html:`<div class="mm-pin" style="background:${colour}">${letter}</div>`, iconSize:[22,22], iconAnchor:[11,11]});
   }
 
-  // Extract UK postcode
+  // Extract UK postcode from address
   function extractPostcode(text){
     if(!text) return '';
     const s = String(text).toUpperCase();
@@ -116,6 +129,25 @@
     return null;
   }
 
+  function updateChips(){
+    const bar = document.getElementById('statusChips');
+    bar.innerHTML = Object.entries(statusColours).map(([status,colour])=>{
+      const count = jobs.filter(j=>j.status===status).length;
+      const off = activeStatuses.has(status)?'':'off';
+      return `<div class="chip ${off}" data-status="${status}">
+                <span class="dot" style="background:${colour}"></span>${status} (${count})
+              </div>`;
+    }).join('');
+    bar.querySelectorAll('.chip').forEach(chip=>{
+      chip.addEventListener('click',()=>{
+        const s = chip.dataset.status;
+        if(activeStatuses.has(s)) activeStatuses.delete(s); else activeStatuses.add(s);
+        updateChips();
+        plotJobs();
+      });
+    });
+  }
+
   async function plotJobs(){
     markers.clearLayers();
     for(const j of jobs){
@@ -127,25 +159,11 @@
         .bindPopup(`<b>${j.status}</b><br>${j.title || ''}<br>${j.address || ''}`);
       markers.addLayer(m);
     }
+    updateChips();
     if(markers.getLayers().length) map.fitBounds(markers.getBounds().pad(0.2));
   }
 
-  function updateFilters(){
-    const box = document.getElementById('statusFilters');
-    box.innerHTML = Object.entries(statusColours).map(([st,col])=>`
-      <label><input type="checkbox" data-status="${st}" checked><span class="dot" style="background:${col}"></span>${st}</label>
-    `).join('');
-    box.querySelectorAll('input').forEach(cb=>{
-      cb.addEventListener('change',()=>{
-        if(cb.checked) activeStatuses.add(cb.dataset.status);
-        else activeStatuses.delete(cb.dataset.status);
-        plotJobs();
-      });
-    });
-  }
-
-  updateFilters();
-
+  // Import CSV
   document.getElementById('importCsvBtn').onclick = ()=> document.getElementById('csvUpload').click();
   document.getElementById('csvUpload').addEventListener('change', e=>{
     const file = e.target.files?.[0];
@@ -154,6 +172,7 @@
       header:true,
       skipEmptyLines:'greedy',
       complete: async (res)=>{
+        jobs.length = 0;
         let count=0;
         for(const r of res.data){
           const address = Object.values(r).join(' ');
@@ -170,6 +189,8 @@
       }
     });
   });
+
+  updateChips();
 })();
 </script>
 </body>

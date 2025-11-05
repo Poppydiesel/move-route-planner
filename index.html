@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Move Motorcycles — Map (CSS watermark)</title>
+  <title>Move Motorcycles — Map (CSS watermark, absolute URL)</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -11,27 +11,31 @@
 
   <style>
     html, body, #map { height: 100%; margin: 0; }
-    :root { --tile-z:200; --logo-z:210; --overlay-z:400; --marker-z:600; }
 
-    /* Force Leaflet’s standard stacking order */
-    .leaflet-pane.leaflet-tile-pane    { z-index: var(--tile-z)    !important; }
-    .leaflet-pane.leaflet-overlay-pane { z-index: var(--overlay-z) !important; }
-    .leaflet-pane.leaflet-marker-pane  { z-index: var(--marker-z)  !important; }
+    /* Force standard Leaflet stacking */
+    .leaflet-pane.leaflet-tile-pane    { z-index: 200 !important; }
+    .leaflet-pane.leaflet-overlay-pane { z-index: 400 !important; }
+    .leaflet-pane.leaflet-marker-pane  { z-index: 600 !important; }
     .leaflet-pane.leaflet-tooltip-pane { z-index: 650 !important; }
     .leaflet-pane.leaflet-popup-pane   { z-index: 700 !important; }
 
-    /* ✅ CSS watermark: inside the TILE pane via a pseudo-element */
+    /* ✅ CSS watermark in the TILE pane */
     .leaflet-tile-pane::after{
       content:"";
       position:absolute; inset:0;
       pointer-events:none;
-      z-index: var(--logo-z);          /* above tiles, still below overlays/markers */
-      background-image: url('Move-Motorcycles-Blue.png?v=10'); /* exact filename */
-      background-repeat: repeat;
-      background-size: 220px 220px;    /* tile size */
-      opacity: 0.25;                   /* ~25% as per master map */
-      transform: rotate(-30deg);       /* diagonal */
-      transform-origin: center center;
+      z-index:210;                 /* above tiles, below overlays/markers */
+      background-image:url('https://poppydiesel.github.io/move-route-planner/Move-Motorcycles-Blue.png?v=11'); /* absolute path */
+      background-repeat:repeat;
+      background-size:220px 220px; /* tile size */
+      opacity:0.25;                /* logo opacity */
+      transform:rotate(-30deg);
+      transform-origin:center center;
+
+      /* ---- TEMP DEBUG: faint tint so we know the layer exists ---- */
+      box-shadow: inset 0 0 0 1px rgba(255,0,0,0.08);
+      background-color: rgba(255,0,0,0.02);
+      /* remove the two lines above once you see the logo */
     }
   </style>
 </head>
@@ -39,13 +43,10 @@
   <div id="map"></div>
 
   <script>
-    // Minimal map
     const map = L.map('map', { preferCanvas:true }).setView([51.7520, -1.2577], 7);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
-
-    // Example pin so you can verify stacking (pin must be above watermark)
     L.marker([51.7520,-1.2577]).addTo(map).bindPopup('Oxford').openPopup();
   </script>
 </body>

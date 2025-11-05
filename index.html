@@ -3,103 +3,50 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Move Motorcycles — Watermark Map</title>
+  <title>Move Motorcycles — Map (CSS watermark)</title>
 
-  <!-- Leaflet core -->
-  <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
-        crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"
-          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <style>
     html, body, #map { height: 100%; margin: 0; }
-    :root { --navy:#040C34; --gold:#A08C59; }
+    :root { --tile-z:200; --logo-z:210; --overlay-z:400; --marker-z:600; }
 
-    /* --- Force standard Leaflet pane order --- */
-    .leaflet-pane.leaflet-tile-pane   { z-index: 200 !important; }
-    .leaflet-pane.leaflet-overlay-pane{ z-index: 400 !important; }
-    .leaflet-pane.leaflet-shadow-pane { z-index: 500 !important; }
-    .leaflet-pane.leaflet-marker-pane { z-index: 600 !important; }
-    .leaflet-pane.leaflet-tooltip-pane{ z-index: 650 !important; }
-    .leaflet-pane.leaflet-popup-pane  { z-index: 700 !important; }
+    /* Force Leaflet’s standard stacking order */
+    .leaflet-pane.leaflet-tile-pane    { z-index: var(--tile-z)    !important; }
+    .leaflet-pane.leaflet-overlay-pane { z-index: var(--overlay-z) !important; }
+    .leaflet-pane.leaflet-marker-pane  { z-index: var(--marker-z)  !important; }
+    .leaflet-pane.leaflet-tooltip-pane { z-index: 650 !important; }
+    .leaflet-pane.leaflet-popup-pane   { z-index: 700 !important; }
 
-    /* --- Logo overlay inside tile pane (below overlays/markers) --- */
-    #logoOverlay{
+    /* ✅ CSS watermark: inside the TILE pane via a pseudo-element */
+    .leaflet-tile-pane::after{
+      content:"";
       position:absolute; inset:0;
       pointer-events:none;
-      background-repeat:repeat;
-      background-size:220px 220px;
-      z-index:210; /* above base tiles only */
-    }
-
-    /* simple debug box if something fails */
-    #mm-debug {
-      position: fixed; top: 8px; left: 8px;
-      background:#fff3cd; padding:6px 10px; border-radius:6px;
-      font:12px system-ui; z-index:99999; display:none;
+      z-index: var(--logo-z);          /* above tiles, still below overlays/markers */
+      background-image: url('Move-Motorcycles-Blue.png?v=10'); /* exact filename */
+      background-repeat: repeat;
+      background-size: 220px 220px;    /* tile size */
+      opacity: 0.25;                   /* ~25% as per master map */
+      transform: rotate(-30deg);       /* diagonal */
+      transform-origin: center center;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="mm-debug"></div>
 
   <script>
-  // Small debug helper
-  const dbg = document.getElementById('mm-debug');
-  function say(msg){ dbg.textContent = msg; dbg.style.display = 'block'; }
+    // Minimal map
+    const map = L.map('map', { preferCanvas:true }).setView([51.7520, -1.2577], 7);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-  // --- 1) Initialise Leaflet map ---
-  const map = L.map('map', { preferCanvas:true }).setView([51.7520, -1.2577], 7);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
-
-  // Example marker
-  L.marker([51.7520, -1.2577]).addTo(map).bindPopup('Oxford HQ');
-
-  // --- 2) Create overlay div inside the TILE pane ---
-  const tilePane = map.getPanes().tilePane;
-  let mmOverlay = document.getElementById('logoOverlay');
-  if (!mmOverlay) {
-    mmOverlay = L.DomUtil.create('div', '', tilePane);
-    mmOverlay.id = 'logoOverlay';
-  }
-
-  function sizeOverlay(){
-    const s = map.getSize();
-    mmOverlay.style.width = s.x + 'px';
-    mmOverlay.style.height = s.y + 'px';
-  }
-  map.on('resize zoom move', sizeOverlay);
-  sizeOverlay();
-
-  // --- 3) Draw rotated, semi-transparent logo pattern ---
-  (function(){
-    const img = new Image(); img.crossOrigin = 'anonymous';
-    img.onload = function(){
-      const tileSize = 220, w = 200, h = 200;
-      const cnv = document.createElement('canvas');
-      cnv.width = tileSize; cnv.height = tileSize;
-      const ctx = cnv.getContext('2d');
-      ctx.clearRect(0,0,tileSize,tileSize);
-      ctx.save();
-      ctx.translate(tileSize/2, tileSize/2);
-      ctx.rotate(-30 * Math.PI/180);  // diagonal angle
-      ctx.globalAlpha = 0.25;         // opacity (25 %)
-      ctx.drawImage(img, -w/2, -h/2, w, h);
-      ctx.restore();
-      mmOverlay.style.backgroundImage = 'url(' + cnv.toDataURL('image/png') + ')';
-      mmOverlay.style.backgroundSize  = tileSize + 'px ' + tileSize + 'px';
-      dbg.style.display = 'none';
-    };
-    img.onerror = function(){
-      say('Logo failed to load — file must be "Move-Motorcycles-Blue.png" next to index.html');
-    };
-    img.src = 'Move-Motorcycles-Blue.png' + (location.search ? '' : '?v=9');
-  })();
+    // Example pin so you can verify stacking (pin must be above watermark)
+    L.marker([51.7520,-1.2577]).addTo(map).bindPopup('Oxford').openPopup();
   </script>
 </body>
 </html>

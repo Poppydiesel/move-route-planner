@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>MM — Minimal Map with Logo Watermark</title>
+  <title>MM — Minimal Map with Auto Logo Watermark</title>
 
   <!-- Leaflet (single source) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -11,21 +11,25 @@
 
   <style>
     html, body, #map { height: 100%; margin: 0; }
-    /* ensure our pane/overlay stretch the map */
+    /* make sure our pane/overlay stretch across the map */
     .leaflet-pane.mm-watermark, .mm-logo-tiler { position: absolute; inset: 0; }
+    /* tiny debug message box (only shows if needed) */
+    #mm-debug { position:fixed; top:8px; left:8px; background:#fff3cd; padding:6px 10px; border-radius:6px; z-index:99999; font:12px system-ui; display:none; }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="mm-debug"></div>
 
   <script>
-  // Show any runtime JS errors visibly on the page
-  window.addEventListener('error', e => {
-    const box = document.createElement('div');
-    box.textContent = 'JS error: ' + (e.error?.message || e.message);
-    box.style.cssText = 'position:fixed;top:8px;left:8px;background:#fff3cd;padding:6px 10px;border-radius:6px;z-index:99999;font:12px system-ui';
-    document.body.appendChild(box);
-  });
+  // Hard-refresh helper without F-keys: add ?v=number on URL
+  // Example: https://poppydiesel.github.io/move-route-planner/?v=2
+
+  const debugBox = document.getElementById('mm-debug');
+  function showDebug(msg){
+    debugBox.textContent = msg;
+    debugBox.style.display = 'block';
+  }
 
   // 1) Minimal Leaflet init
   const map = L.map('map', { preferCanvas:true }).setView([51.7520, -1.2577], 7);
@@ -34,64 +38,76 @@
   }).addTo(map);
   L.marker([51.7520,-1.2577]).addTo(map).bindPopup('Oxford').openPopup();
 
-  // 2) Create a pane that sits ABOVE tiles but BELOW markers
-  const mmPane = map.createPane('mm-watermark');     // class: leaflet-pane mm-watermark
-  mmPane.style.zIndex = 300;                         // tiles ~200, markers/overlay higher
+  // 2) Create a pane ABOVE tiles but BELOW markers
+  const mmPane = map.createPane('mm-watermark');   // class: leaflet-pane mm-watermark
+  mmPane.style.zIndex = 350;                       // tiles ~200, overlay 400, markers 600
   mmPane.style.pointerEvents = 'none';
 
-  // 3) Create an overlay div inside that pane
+  // 3) Create overlay div inside that pane
   const mmOverlay = L.DomUtil.create('div', 'mm-logo-tiler', mmPane);
   mmOverlay.id = 'logoOverlay';
   Object.assign(mmOverlay.style, {
     backgroundRepeat: 'repeat',
-    backgroundSize: '220px 220px' // will be set again by JS below
-
-    function sizeOverlay(){
-  const s = map.getSize();
-  mmOverlay.style.width = s.x + 'px';
-  mmOverlay.style.height = s.y + 'px';
-}
-map.on('resize zoom move', sizeOverlay);
-sizeOverlay();
-
-    
+    backgroundSize: '220px 220px'
   });
 
-  // 4) Build diagonal logo pattern from your PNG (tiled canvas -> background-image)
-  (function(){
+  // Keep overlay sized to map
+  function sizeOverlay(){
+    const s = map.getSize();
+    mmOverlay.style.width = s.x + 'px';
+    mmOverlay.style.height = s.y + 'px';
+  }
+  map.on('resize zoom move', sizeOverlay);
+  sizeOverlay();
+
+  // 4) Try to load your logo with several filename options automatically
+  const candidatePaths = [
+    'Move-Motorcycles-Blue.png',       // hyphens (preferred)
+    'Move%20Motorcycles%20Blue.png',   // spaces encoded
+    'move-motorcycles-blue.png',       // lowercase hyphens
+    'Move%20motorcycles%20Blue.png'    // mixed case with spaces
+  ];
+
+  function buildWatermark(img){
+    const tileSize = 220;    // tile step
+    const w = 200, h = 200;  // logo draw size within tile
+    const cnv = document.createElement('canvas');
+    cnv.width = tileSize; cnv.height = tileSize;
+    const ctx = cnv.getContext('2d');
+
+    ctx.clearRect(0,0,tileSize,tileSize);
+    ctx.save();
+    ctx.translate(tileSize/2, tileSize/2);
+    ctx.rotate(-30 * Math.PI/180);   // diagonal
+    ctx.globalAlpha = 0.25;          // 25% opacity
+    ctx.drawImage(img, -w/2, -h/2, w, h);
+    ctx.restore();
+
+    const dataURL = cnv.toDataURL('image/png');
+    mmOverlay.style.backgroundImage = 'url(' + dataURL + ')';
+    mmOverlay.style.backgroundSize  = tileSize + 'px ' + tileSize + 'px';
+    // success message off (if any)
+    debugBox.style.display = 'none';
+  }
+
+  // Attempt to load logo from candidates in sequence
+  (function tryLoad(i=0){
+    if(i >= candidatePaths.length){
+      showDebug('Logo not found. Check filename in repo root. Tried: ' + candidatePaths.join('  •  '));
+      return;
+    }
+    const path = candidatePaths[i];
     const img = new Image();
-    img.onerror = function(){
-  const box = document.createElement('div');
-  box.textContent = 'Logo failed to load: check filename/path';
-  box.style.cssText = 'position:fixed;top:8px;left:8px;background:#ffd5d5;padding:6px 10px;border-radius:6px;z-index:99999;font:12px system-ui';
-  document.body.appendChild(box);
-};
-
-    img.onload = function(){
-      const tileSize = 220;    // tile step
-      const w = 200, h = 200;  // logo draw size within tile
-      const cnv = document.createElement('canvas');
-      cnv.width = tileSize; cnv.height = tileSize;
-      const ctx = cnv.getContext('2d');
-
-      ctx.clearRect(0,0,tileSize,tileSize);
-      ctx.save();
-      ctx.translate(tileSize/2, tileSize/2);
-      ctx.rotate(-30 * Math.PI/180);   // diagonal
-      ctx.globalAlpha = 0.25;          // ~25% opacity
-      ctx.drawImage(img, -w/2, -h/2, w, h);
-      ctx.restore();
-
-      const dataURL = cnv.toDataURL('image/png');
-      const overlay = document.getElementById('logoOverlay');
-      overlay.style.backgroundImage = 'url(' + dataURL + ')';
-      overlay.style.backgroundRepeat = 'repeat';
-      overlay.style.backgroundSize = tileSize + 'px ' + tileSize + 'px';
+    img.crossOrigin = 'anonymous'; // allow canvas usage
+    img.onload = () => {
+      buildWatermark(img);
     };
-
-   img.src = 'Move%20Motorcycles%20Blue.png';  // URL-encoded spaces
-   
-    
+    img.onerror = () => {
+      // try next candidate
+      tryLoad(i+1);
+    };
+    img.src = path + (location.search ? '' : '?v=2'); // simple cache-bust
+    showDebug('Loading logo: ' + path);
   })();
   </script>
 </body>

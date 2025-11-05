@@ -22,37 +22,29 @@
   <div id="mm-debug"></div>
 
   <script>
-  // Hard-refresh helper without F-keys: add ?v=number on URL
-  // Example: https://poppydiesel.github.io/move-route-planner/?v=2
+// --- RESET any previous overlays/panes so they can't sit on top ---
+['logoOverlay'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+});
+document.querySelectorAll('.mm-watermark, .mm-logo-tiler').forEach(el => {
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+});
 
-  const debugBox = document.getElementById('mm-debug');
-  function showDebug(msg){
-    debugBox.textContent = msg;
-    debugBox.style.display = 'block';
-  }
-
-  // 1) Minimal Leaflet init
-  const map = L.map('map', { preferCanvas:true }).setView([51.7520, -1.2577], 7);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
-  L.marker([51.7520,-1.2577]).addTo(map).bindPopup('Oxford').openPopup();
-
-  // 2) Create a pane ABOVE tiles but BELOW markers
-  // Put the logo inside the TILE pane (below overlays/markers)
-const tilePane = map.getPanes().tilePane;
+// --- Place watermark INSIDE THE TILE PANE (below vectors/markers) ---
+const tilePane = map.getPanes().tilePane;   // z-index ~200 (parent stacking context)
 const mmOverlay = L.DomUtil.create('div', 'mm-logo-tiler', tilePane);
 mmOverlay.id = 'logoOverlay';
 Object.assign(mmOverlay.style, {
   position: 'absolute',
   inset: '0',
-  zIndex: 250,            // tiles ~200, our logo 250, overlays 400, markers 600
-  pointerEvents: 'none',  // never block clicks
+  zIndex: 210,             // stays within tilePane's stacking context (200) → below overlays/markers
+  pointerEvents: 'none',
   backgroundRepeat: 'repeat',
   backgroundSize: '220px 220px'
 });
 
-// keep it sized to the map
+// keep it sized to the map viewport
 function sizeOverlay(){
   const s = map.getSize();
   mmOverlay.style.width = s.x + 'px';
@@ -61,55 +53,26 @@ function sizeOverlay(){
 map.on('resize zoom move', sizeOverlay);
 sizeOverlay();
 
-  // 4) Try to load your logo with several filename options automatically
-  const candidatePaths = [
-    'Move-Motorcycles-Blue.png',       // hyphens (preferred)
-    'Move%20Motorcycles%20Blue.png',   // spaces encoded
-    'move-motorcycles-blue.png',       // lowercase hyphens
-    'Move%20motorcycles%20Blue.png'    // mixed case with spaces
-  ];
-
-  function buildWatermark(img){
-    const tileSize = 220;    // tile step
-    const w = 200, h = 200;  // logo draw size within tile
-    const cnv = document.createElement('canvas');
-    cnv.width = tileSize; cnv.height = tileSize;
+// --- Rebuild the tiled, rotated, semi-transparent pattern from your PNG ---
+(function(){
+  const img = new Image(); img.crossOrigin = 'anonymous';
+  img.onload = function(){
+    const tileSize = 220, w = 200, h = 200;
+    const cnv = document.createElement('canvas'); cnv.width = tileSize; cnv.height = tileSize;
     const ctx = cnv.getContext('2d');
-
     ctx.clearRect(0,0,tileSize,tileSize);
     ctx.save();
     ctx.translate(tileSize/2, tileSize/2);
-    ctx.rotate(-30 * Math.PI/180);   // diagonal
-    ctx.globalAlpha = 0.25;          // 25% opacity
-    ctx.drawImage(img, -w/2, -h/2, w, h);
+    ctx.rotate(-30 * Math.PI/180);
+    ctx.globalAlpha = 0.25;               // opacity
+    ctx.drawImage(img, -w/2, -h/2, w, h); // draw logo
     ctx.restore();
-
-    const dataURL = cnv.toDataURL('image/png');
-    mmOverlay.style.backgroundImage = 'url(' + dataURL + ')';
+    mmOverlay.style.backgroundImage = 'url(' + cnv.toDataURL('image/png') + ')';
     mmOverlay.style.backgroundSize  = tileSize + 'px ' + tileSize + 'px';
-    // success message off (if any)
-    debugBox.style.display = 'none';
-  }
+  };
+  img.src = 'Move-Motorcycles-Blue.png';  // exact filename in repo root
+})();
+</script>
 
-  // Attempt to load logo from candidates in sequence
-  (function tryLoad(i=0){
-    if(i >= candidatePaths.length){
-      showDebug('Logo not found. Check filename in repo root. Tried: ' + candidatePaths.join('  •  '));
-      return;
-    }
-    const path = candidatePaths[i];
-    const img = new Image();
-    img.crossOrigin = 'anonymous'; // allow canvas usage
-    img.onload = () => {
-      buildWatermark(img);
-    };
-    img.onerror = () => {
-      // try next candidate
-      tryLoad(i+1);
-    };
-    img.src = path + (location.search ? '' : '?v=2'); // simple cache-bust
-    showDebug('Loading logo: ' + path);
-  })();
-  </script>
 </body>
 </html>

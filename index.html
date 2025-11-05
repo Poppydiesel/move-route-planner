@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Move Motorcycles — Map (CSS watermark, absolute URL)</title>
+  <title>Move Motorcycles — Map (CSS watermark final)</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -19,34 +19,59 @@
     .leaflet-pane.leaflet-tooltip-pane { z-index: 650 !important; }
     .leaflet-pane.leaflet-popup-pane   { z-index: 700 !important; }
 
-    /* ✅ CSS watermark in the TILE pane */
-    .leaflet-tile-pane { position: absolute !important; inset:0; }
+    /* Ensure the tile pane establishes positioning for ::after */
+    .leaflet-tile-pane { position: absolute !important; inset: 0; }
 
+    /* ✅ CSS watermark drawn in the TILE pane (under overlays/markers) */
+    .leaflet-tile-pane::after{
+      content:"";
+      position:absolute; inset:0;
       pointer-events:none;
-      z-index:210;                 /* above tiles, below overlays/markers */
-      background-image:url('https://poppydiesel.github.io/move-route-planner/Move-Motorcycles-Blue.png?v=11'); /* absolute path */
-      background-repeat:repeat;
-      background-size:220px 220px; /* tile size */
-      opacity:0.25;                /* logo opacity */
-      transform:rotate(-30deg);
-      transform-origin:center center;
+      z-index:210; /* above raw tiles, still below overlays/markers */
+      background-image: url('https://poppydiesel.github.io/move-route-planner/Move-Motorcycles-Blue.png?v=12');
+      background-repeat: repeat;
+      background-size: 220px 220px; /* tile size */
+      opacity: 0.25;                /* watermark opacity */
+      transform: rotate(-30deg);
+      transform-origin: center center;
+    }
 
-      /* ---- TEMP DEBUG: faint tint so we know the layer exists ---- */
-      box-shadow: inset 0 0 0 1px rgba(255,0,0,0.08);
-      background-color: rgba(255,0,0,0.02);
-      /* remove the two lines above once you see the logo */
+    /* Tiny on-page debug (auto-hides if all good) */
+    #mm-debug {
+      position: fixed; top: 8px; left: 8px; z-index: 99999;
+      background:#fff3cd; padding:6px 10px; border-radius:6px;
+      font:12px system-ui; display:none;
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="mm-debug"></div>
 
   <script>
+    // Minimal map
     const map = L.map('map', { preferCanvas:true }).setView([51.7520, -1.2577], 7);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
     L.marker([51.7520,-1.2577]).addTo(map).bindPopup('Oxford').openPopup();
+
+    // Self-check: confirm the pseudo-element picked up the logo
+    const dbg = document.getElementById('mm-debug');
+    function checkLogo(){
+      const tilePane = document.querySelector('.leaflet-tile-pane');
+      if (!tilePane) return;
+      const bg = getComputedStyle(tilePane, '::after').backgroundImage;
+      if (bg && bg !== 'none') {
+        // looks good — hide debug box if it was shown
+        dbg.style.display = 'none';
+      } else {
+        dbg.textContent = 'Watermark layer active but no image. Check PNG URL or caching.';
+        dbg.style.display = 'block';
+      }
+    }
+    // run after Leaflet has built panes
+    setTimeout(checkLogo, 100);
   </script>
 </body>
 </html>

@@ -3,74 +3,32 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Move Motorcycles Watermark Test</title>
+  <title>MM — Minimal Map Sanity Check</title>
 
-  <!-- Leaflet from cdnjs (alt to unpkg) -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" integrity="sha512-pM8Gv3cM9H7c4Q4Y7YtQxT3yW6nXv3xYh6gkCq3hZs3Z1bSRy5RUK0y7XlA8k8y2yWQbXK7Zb0hA3V6oMRuYaw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" integrity="sha512-Q+v2gQf2B0h1ZL8Jk9d8q6c0nJ1dGm9l9imYcQ0p0W3sQM6q+2vU4Rk2cQf8yq6r6g1r0k6mG7V2o0s9t1YqBA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <!-- Leaflet (single source; do not include any other Leaflet versions) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <style>
-    html, body { height:100%; margin:0; }
-    #map { height:100%; min-height:100vh; }
-    /* make any JS error visible quickly */
-    #err { position:fixed; top:8px; left:8px; background:#fff3cd; color:#111; padding:6px 8px; border-radius:6px; font:12px system-ui; z-index:99999; display:none; }
+    html, body, #map { height: 100%; margin: 0; }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="err"></div>
 
   <script>
-  (function(){
-    const errBox = document.getElementById('err');
-    window.addEventListener('error', e => {
-      errBox.style.display = 'block';
-      errBox.textContent = 'JS error: ' + (e.error?.message || e.message);
-    });
+  // If any error happens, show it visibly
+  window.addEventListener('error', e => {
+    const box = document.createElement('div');
+    box.textContent = 'JS error: ' + (e.error?.message || e.message);
+    box.style.cssText = 'position:fixed;top:8px;left:8px;background:#fff3cd;padding:6px 10px;border-radius:6px;z-index:99999;font:12px system-ui';
+    document.body.appendChild(box);
+  });
 
-    // 1) Init map
-    const map = L.map('map').setView([52.8,-1.6], 6);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-      maxZoom:19,
-      attribution:'&copy; OpenStreetMap'
-    }).addTo(map);
-
-    // 2) Add a marker so we know map is alive
-    L.marker([51.7520,-1.2577]).addTo(map).bindPopup('Oxford test marker');
-
-    // 3) Watermark as a managed Leaflet layer
-    const WatermarkLayer = L.Layer.extend({
-      onAdd: function(map) {
-        const pane = map.getPanes().overlayPane; // under markers, above tiles
-        const div = L.DomUtil.create('div', 'move-watermark', pane);
-        Object.assign(div.style, {
-          position: 'absolute',
-          top: 0, left: 0, right: 0, bottom: 0,
-          backgroundImage: "url('Move%20Motorcycles%20Blue.png')",
-          backgroundRepeat: 'repeat',
-          backgroundSize: '220px auto',
-          opacity: 0.25,
-          transform: 'rotate(-25deg)',
-          transformOrigin: 'center center',
-          pointerEvents: 'none'
-        });
-        this._div = div;
-        map.on('move zoom resize', this._update, this);
-        this._update();
-      },
-      onRemove: function(map) {
-        map.off('move zoom resize', this._update, this);
-        if (this._div && this._div.parentNode) this._div.parentNode.removeChild(this._div);
-      },
-      _update: function() {
-        if (!this._div) return;
-        const size = this._map.getSize();
-        this._div.style.width = size.x + 'px';
-        this._div.style.height = size.y + 'px';
-      }
-    });
-    new WatermarkLayer().addTo(map);
-  })();
+  // Minimal Leaflet init
+  const map = L.map('map').setView([51.7520,-1.2577], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+  L.marker([51.7520,-1.2577]).addTo(map).bindPopup('Oxford').openPopup();
   </script>
 </body>
 </html>

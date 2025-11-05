@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>MM — Minimal Map with Auto Logo Watermark</title>
+  <title>Move Motorcycles — Map + Logo (tile-pane)</title>
 
   <!-- Leaflet (single source) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -11,10 +11,11 @@
 
   <style>
     html, body, #map { height: 100%; margin: 0; }
-    /* make sure our pane/overlay stretch across the map */
-    .leaflet-pane.mm-watermark, .mm-logo-tiler { position: absolute; inset: 0; }
-    /* tiny debug message box (only shows if needed) */
-    #mm-debug { position:fixed; top:8px; left:8px; background:#fff3cd; padding:6px 10px; border-radius:6px; z-index:99999; font:12px system-ui; display:none; }
+    #mm-debug {
+      position: fixed; top: 8px; left: 8px; z-index: 99999;
+      background: #fff3cd; padding: 6px 10px; border-radius: 6px;
+      font: 12px system-ui; display: none;
+    }
   </style>
 </head>
 <body>
@@ -22,57 +23,68 @@
   <div id="mm-debug"></div>
 
   <script>
-// --- RESET any previous overlays/panes so they can't sit on top ---
-['logoOverlay'].forEach(id => {
-  const el = document.getElementById(id);
-  if (el && el.parentNode) el.parentNode.removeChild(el);
-});
-document.querySelectorAll('.mm-watermark, .mm-logo-tiler').forEach(el => {
-  if (el && el.parentNode) el.parentNode.removeChild(el);
-});
+  // --- Small visible debug helper ---
+  const dbg = document.getElementById('mm-debug');
+  function say(msg){ dbg.textContent = msg; dbg.style.display = 'block'; }
 
-// --- Place watermark INSIDE THE TILE PANE (below vectors/markers) ---
-const tilePane = map.getPanes().tilePane;   // z-index ~200 (parent stacking context)
-const mmOverlay = L.DomUtil.create('div', 'mm-logo-tiler', tilePane);
-mmOverlay.id = 'logoOverlay';
-Object.assign(mmOverlay.style, {
-  position: 'absolute',
-  inset: '0',
-  zIndex: 210,             // stays within tilePane's stacking context (200) → below overlays/markers
-  pointerEvents: 'none',
-  backgroundRepeat: 'repeat',
-  backgroundSize: '220px 220px'
-});
+  // --- 1) Minimal Leaflet map (single init) ---
+  const map = L.map('map', { preferCanvas:true }).setView([51.7520, -1.2577], 7);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+  L.marker([51.7520,-1.2577]).addTo(map).bindPopup('Oxford');
 
-// keep it sized to the map viewport
-function sizeOverlay(){
-  const s = map.getSize();
-  mmOverlay.style.width = s.x + 'px';
-  mmOverlay.style.height = s.y + 'px';
-}
-map.on('resize zoom move', sizeOverlay);
-sizeOverlay();
+  // --- 2) Place watermark INSIDE THE TILE PANE (below vectors/markers) ---
+  const tilePane = map.getPanes().tilePane; // parent z-index ~200
+  // remove any old overlay with same id (safety if reusing file)
+  const old = document.getElementById('logoOverlay');
+  if (old && old.parentNode) old.parentNode.removeChild(old);
 
-// --- Rebuild the tiled, rotated, semi-transparent pattern from your PNG ---
-(function(){
-  const img = new Image(); img.crossOrigin = 'anonymous';
-  img.onload = function(){
-    const tileSize = 220, w = 200, h = 200;
-    const cnv = document.createElement('canvas'); cnv.width = tileSize; cnv.height = tileSize;
-    const ctx = cnv.getContext('2d');
-    ctx.clearRect(0,0,tileSize,tileSize);
-    ctx.save();
-    ctx.translate(tileSize/2, tileSize/2);
-    ctx.rotate(-30 * Math.PI/180);
-    ctx.globalAlpha = 0.25;               // opacity
-    ctx.drawImage(img, -w/2, -h/2, w, h); // draw logo
-    ctx.restore();
-    mmOverlay.style.backgroundImage = 'url(' + cnv.toDataURL('image/png') + ')';
-    mmOverlay.style.backgroundSize  = tileSize + 'px ' + tileSize + 'px';
-  };
-  img.src = 'Move-Motorcycles-Blue.png';  // exact filename in repo root
-})();
-</script>
+  const mmOverlay = L.DomUtil.create('div', 'mm-logo-tiler', tilePane);
+  mmOverlay.id = 'logoOverlay';
+  Object.assign(mmOverlay.style, {
+    position: 'absolute',
+    inset: '0',
+    zIndex: 210,              // stays within tilePane stacking; pins are higher in markerPane
+    pointerEvents: 'none',
+    backgroundRepeat: 'repeat',
+    backgroundSize: '220px 220px'
+  });
 
+  // Keep overlay sized to the map viewport
+  function sizeOverlay(){
+    const s = map.getSize();
+    mmOverlay.style.width = s.x + 'px';
+    mmOverlay.style.height = s.y + 'px';
+  }
+  map.on('resize zoom move', sizeOverlay);
+  sizeOverlay();
+
+  // --- 3) Build tiled, rotated, semi-transparent pattern from your PNG ---
+  (function(){
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function(){
+      const tileSize = 220, w = 200, h = 200;
+      const cnv = document.createElement('canvas'); cnv.width = tileSize; cnv.height = tileSize;
+      const ctx = cnv.getContext('2d');
+      ctx.clearRect(0,0,tileSize,tileSize);
+      ctx.save();
+      ctx.translate(tileSize/2, tileSize/2);
+      ctx.rotate(-30 * Math.PI/180);  // diagonal
+      ctx.globalAlpha = 0.25;         // opacity
+      ctx.drawImage(img, -w/2, -h/2, w, h);
+      ctx.restore();
+      mmOverlay.style.backgroundImage = 'url(' + cnv.toDataURL('image/png') + ')';
+      mmOverlay.style.backgroundSize  = tileSize + 'px ' + tileSize + 'px';
+      dbg.style.display = 'none';
+    };
+    img.onerror = function(){
+      say('Logo failed to load. Expected "Move-Motorcycles-Blue.png" next to index.html');
+    };
+    // EXACT filename you said is in the repo root (hyphens)
+    img.src = 'Move-Motorcycles-Blue.png' + (location.search ? '' : '?v=7'); // cache-bust
+  })();
+  </script>
 </body>
 </html>

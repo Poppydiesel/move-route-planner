@@ -45,11 +45,28 @@
   Object.assign(mmOverlay.style, {
     backgroundRepeat: 'repeat',
     backgroundSize: '220px 220px' // will be set again by JS below
+
+    function sizeOverlay(){
+  const s = map.getSize();
+  mmOverlay.style.width = s.x + 'px';
+  mmOverlay.style.height = s.y + 'px';
+}
+map.on('resize zoom move', sizeOverlay);
+sizeOverlay();
+
+    
   });
 
   // 4) Build diagonal logo pattern from your PNG (tiled canvas -> background-image)
   (function(){
     const img = new Image();
+    img.onerror = function(){
+  const box = document.createElement('div');
+  box.textContent = 'Logo failed to load: check filename/path';
+  box.style.cssText = 'position:fixed;top:8px;left:8px;background:#ffd5d5;padding:6px 10px;border-radius:6px;z-index:99999;font:12px system-ui';
+  document.body.appendChild(box);
+};
+
     img.onload = function(){
       const tileSize = 220;    // tile step
       const w = 200, h = 200;  // logo draw size within tile

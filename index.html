@@ -15,6 +15,38 @@
 </head>
 <body>
   <div id="map"></div>
+/* Move Motorcycles watermark as managed Leaflet layer */
+const WatermarkLayer = L.Layer.extend({
+  onAdd: function(map) {
+    const pane = map.getPanes().overlayPane; // under markers, above tiles
+    const div = L.DomUtil.create('div', 'move-watermark', pane);
+    Object.assign(div.style, {
+      position: 'absolute',
+      top: 0, left: 0, right: 0, bottom: 0,
+      backgroundImage: "url('Move%20Motorcycles%20Blue.png')", /* URL-encoded space */
+      backgroundRepeat: 'repeat',
+      backgroundSize: '220px auto',
+      opacity: 0.25,
+      transform: 'rotate(-25deg)',
+      transformOrigin: 'center center',
+      pointerEvents: 'none'
+    });
+    this._div = div;
+    map.on('move zoom resize', this._update, this);
+    this._update();
+  },
+  onRemove: function(map) {
+    map.off('move zoom resize', this._update, this);
+    if (this._div && this._div.parentNode) this._div.parentNode.removeChild(this._div);
+  },
+  _update: function() {
+    if (!this._div) return;
+    const size = this._map.getSize();
+    this._div.style.width = size.x + 'px';
+    this._div.style.height = size.y + 'px';
+  }
+});
+new WatermarkLayer().addTo(map);
 
   <script>
   // If any error happens, show it visibly

@@ -39,26 +39,27 @@
   L.marker([51.7520,-1.2577]).addTo(map).bindPopup('Oxford').openPopup();
 
   // 2) Create a pane ABOVE tiles but BELOW markers
-  const mmPane = map.createPane('mm-watermark');   // class: leaflet-pane mm-watermark
-  mmPane.style.zIndex = 350;                       // tiles ~200, overlay 400, markers 600
-  mmPane.style.pointerEvents = 'none';
+  // Put the logo inside the TILE pane (below overlays/markers)
+const tilePane = map.getPanes().tilePane;
+const mmOverlay = L.DomUtil.create('div', 'mm-logo-tiler', tilePane);
+mmOverlay.id = 'logoOverlay';
+Object.assign(mmOverlay.style, {
+  position: 'absolute',
+  inset: '0',
+  zIndex: 250,            // tiles ~200, our logo 250, overlays 400, markers 600
+  pointerEvents: 'none',  // never block clicks
+  backgroundRepeat: 'repeat',
+  backgroundSize: '220px 220px'
+});
 
-  // 3) Create overlay div inside that pane
-  const mmOverlay = L.DomUtil.create('div', 'mm-logo-tiler', mmPane);
-  mmOverlay.id = 'logoOverlay';
-  Object.assign(mmOverlay.style, {
-    backgroundRepeat: 'repeat',
-    backgroundSize: '220px 220px'
-  });
-
-  // Keep overlay sized to map
-  function sizeOverlay(){
-    const s = map.getSize();
-    mmOverlay.style.width = s.x + 'px';
-    mmOverlay.style.height = s.y + 'px';
-  }
-  map.on('resize zoom move', sizeOverlay);
-  sizeOverlay();
+// keep it sized to the map
+function sizeOverlay(){
+  const s = map.getSize();
+  mmOverlay.style.width = s.x + 'px';
+  mmOverlay.style.height = s.y + 'px';
+}
+map.on('resize zoom move', sizeOverlay);
+sizeOverlay();
 
   // 4) Try to load your logo with several filename options automatically
   const candidatePaths = [

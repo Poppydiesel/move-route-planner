@@ -20,9 +20,8 @@
     .leaflet-pane.leaflet-popup-pane   { z-index: 700 !important; }
 
     /* ✅ CSS watermark in the TILE pane */
-    .leaflet-tile-pane::after{
-      content:"";
-      position:absolute; inset:0;
+    .leaflet-tile-pane { position: absolute !important; inset:0; }
+
       pointer-events:none;
       z-index:210;                 /* above tiles, below overlays/markers */
       background-image:url('https://poppydiesel.github.io/move-route-planner/Move-Motorcycles-Blue.png?v=11'); /* absolute path */

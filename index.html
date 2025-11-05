@@ -3,230 +3,53 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Move Motorcycles – Status Map</title>
-
-  <!-- Leaflet -->
+  <title>Move Motorcycles Watermark Test</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <!-- Marker Clustering -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-
-  <!-- PapaParse -->
-  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
-
   <style>
     html, body, #map { height: 100%; margin: 0; }
-    :root { --navy:#040C34; --gold:#A08C59; }
-
-    /* Bottom gold bar */
-    .bottom-bar {
-      position: fixed; bottom: 0; left: 0; width: 100%; height: 50px;
-      background: rgba(160,140,89,0.9);
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 12px; box-sizing: border-box;
-      font-family: system-ui, sans-serif; font-size: 14px;
-      z-index: 1000;
-    }
-    .status-chips {
-      display: flex; flex-wrap: nowrap; gap: 10px; overflow-x: auto;
-      scrollbar-width: none; -ms-overflow-style: none;
-    }
-    .status-chips::-webkit-scrollbar { display: none; }
-    .chip {
-      display: flex; align-items: center; gap: 4px;
-      padding: 4px 8px; border-radius: 20px; background: rgba(255,255,255,0.85);
-      color: var(--navy); cursor: pointer; white-space: nowrap; font-weight: 600;
-      border: 1px solid rgba(0,0,0,0.1);
-      user-select: none;
-    }
-    .chip .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .chip.off { opacity: 0.4; }
-
-    .import-btn {
-      background: #fff; color: var(--navy); border: none; border-radius: 8px;
-      padding: 6px 12px; font-weight: 700; cursor: pointer;
-    }
-
-    /* Pin design */
-    .mm-pin {
-      width:22px; height:22px; border-radius:50%; border:2px solid #fff;
-      box-shadow:0 0 0 1px rgba(0,0,0,.2); display:flex; align-items:center;
-      justify-content:center; color:#fff; font:bold 12px system-ui;
-    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <script>
+  const map = L.map('map').setView([52.8,-1.6],6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
-  <div class="bottom-bar">
-    <div class="status-chips" id="statusChips"></div>
-    <div>
-      <button class="import-btn" id="importCsvBtn">Import CSV</button>
-      <input id="csvUpload" type="file" accept=".csv" style="display:none">
-    </div>
-  </div>
-
-<script>
-(function(){
-  // --- Initialise Map ---
-  const map = L.map('map').setView([52.8, -1.6], 6);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(map);
-
-// --- Move Motorcycles watermark layer (guaranteed method) ---
-const WatermarkLayer = L.Layer.extend({
-  onAdd: function(map) {
-    const pane = map.getPanes().overlayPane;
-    const div = L.DomUtil.create('div', 'move-watermark', pane);
-    Object.assign(div.style, {
-      position: 'absolute',
-      top: 0, left: 0, right: 0, bottom: 0,
-      backgroundImage: "url('Move%20Motorcycles%20Blue.png')",
-      backgroundRepeat: 'repeat',
-      backgroundSize: '220px auto',
-      opacity: 0.25,
-      transform: 'rotate(-25deg)',
-      transformOrigin: 'center center',
-      pointerEvents: 'none'
-    });
-    this._div = div;
-    map.on('move zoom', this._update, this);
-    this._update();
-  },
-  onRemove: function(map) {
-    map.off('move zoom', this._update, this);
-    if (this._div && this._div.parentNode) {
-      this._div.parentNode.removeChild(this._div);
-    }
-
-  _update: function() {
-    if (!this._div) return;
-    const size = this._map.getSize();
-    this._div.style.width = size.x + 'px';
-    this._div.style.height = size.y + 'px';
-  }
-});
-new WatermarkLayer().addTo(map);
-
-
-  // --- Marker cluster layer ---
-  const markers = L.markerClusterGroup({ showCoverageOnHover:false, spiderfyOnEveryZoom:true });
-  map.addLayer(markers);
-
-  // --- Status Colours ---
-  const statusColours = {
-    'Pick up Request': '#de3323',
-    'Booking received': '#2e22f4',
-    'Driver assigned for collection': '#ecd0a7',
-    'Collected': '#eaa83d',
-    'Driver assigned for delivery': '#ecd0a7',
-    'Delivered': '#38651d'
-  };
-
-  const jobs = [];
-  const activeStatuses = new Set(Object.keys(statusColours));
-
-  // --- Create marker icons ---
-  function makeIcon(letter, colour){
-    return L.divIcon({
-      className:'',
-      html:`<div class="mm-pin" style="background:${colour}">${letter}</div>`,
-      iconSize:[22,22],
-      iconAnchor:[11,11]
-    });
-  }
-
-  // --- Extract UK postcode from text ---
-  function extractPostcode(text){
-    if(!text) return '';
-    const s = String(text).toUpperCase();
-    const re = /\b(GIR 0AA|[A-PR-UWYZ][A-HK-Y]?\d[\dA-Z]?\s*\d[A-Z]{2})\b/ig;
-    let m, last=null;
-    while((m = re.exec(s))){ last = m[1] || m[0]; }
-    if(!last) return '';
-    const compact = last.replace(/\s+/g,'');
-    return compact.replace(/^(.+?)(\d[A-Z]{2})$/, (_,a,b)=>a.trim()+' '+b);
-  }
-
-  // --- Geocode via postcodes.io ---
-  async function geocode(pc){
-    if(!pc) return null;
-    const q = pc.replace(/\s+/g,'');
-    try{
-      const r = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(q)}`);
-      const d = await r.json();
-      if(d && d.status===200 && d.result) return {lat:d.result.latitude, lng:d.result.longitude};
-    }catch(e){}
-    return null;
-  }
-
-  // --- Update bottom bar chips ---
-  function updateChips(){
-    const bar = document.getElementById('statusChips');
-    bar.innerHTML = Object.entries(statusColours).map(([status,colour])=>{
-      const count = jobs.filter(j=>j.status===status).length;
-      const off = activeStatuses.has(status)?'':'off';
-      return `<div class="chip ${off}" data-status="${status}">
-                <span class="dot" style="background:${colour}"></span>${status} (${count})
-              </div>`;
-    }).join('');
-    bar.querySelectorAll('.chip').forEach(chip=>{
-      chip.addEventListener('click',()=>{
-        const s = chip.dataset.status;
-        if(activeStatuses.has(s)) activeStatuses.delete(s); else activeStatuses.add(s);
-        updateChips();
-        plotJobs();
+  // --- Move Motorcycles watermark layer (guaranteed method) ---
+  const WatermarkLayer = L.Layer.extend({
+    onAdd: function(map) {
+      const pane = map.getPanes().overlayPane;
+      const div = L.DomUtil.create('div', 'move-watermark', pane);
+      Object.assign(div.style, {
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+        backgroundImage: "url('Move%20Motorcycles%20Blue.png')",
+        backgroundRepeat: 'repeat',
+        backgroundSize: '220px auto',
+        opacity: 0.25,
+        transform: 'rotate(-25deg)',
+        transformOrigin: 'center center',
+        pointerEvents: 'none'
       });
-    });
-  }
-
-  // --- Plot all pins ---
-  async function plotJobs(){
-    markers.clearLayers();
-    for(const j of jobs){
-      if(!activeStatuses.has(j.status)) continue;
-      if(!j.lat || !j.lng) continue;
-      const c = statusColours[j.status] || '#555';
-      const letter = j.status[0].toUpperCase();
-      const m = L.marker([j.lat,j.lng], {icon:makeIcon(letter,c)})
-        .bindPopup(`<b>${j.status}</b><br>${j.title || ''}<br>${j.address || ''}`);
-      markers.addLayer(m);
-    }
-    updateChips();
-    if(markers.getLayers().length) map.fitBounds(markers.getBounds().pad(0.2));
-  }
-
-  // --- Import CSV button ---
-  document.getElementById('importCsvBtn').onclick = ()=> document.getElementById('csvUpload').click();
-  document.getElementById('csvUpload').addEventListener('change', e=>{
-    const file = e.target.files?.[0];
-    if(!file) return;
-    Papa.parse(file, {
-      header:true,
-      skipEmptyLines:'greedy',
-      complete: async (res)=>{
-        jobs.length = 0;
-        let count=0;
-        for(const r of res.data){
-          const address = Object.values(r).join(' ');
-          const pc = extractPostcode(address);
-          if(!pc) continue;
-          const g = await geocode(pc);
-          if(!g) continue;
-          const status = (r['status'] || r['Shipment Status'] || 'Booking received').trim();
-          jobs.push({status, title:r['title']||r['Description']||'', address, lat:g.lat, lng:g.lng});
-          count++;
-        }
-        alert(`Imported ${count} jobs`);
-        plotJobs();
+      this._div = div;
+      map.on('move zoom', this._update, this);
+      this._update();
+    },
+    onRemove: function(map) {
+      map.off('move zoom', this._update, this);
+      if (this._div && this._div.parentNode) {
+        this._div.parentNode.removeChild(this._div);
       }
-    });
+    },
+    _update: function() {
+      if (!this._div) return;
+      const size = this._map.getSize();
+      this._div.style.width = size.x + 'px';
+      this._div.style.height = size.y + 'px';
+    }
   });
-
-  updateChips();
-})();
-</script>
+  new WatermarkLayer().addTo(map);
+  </script>
 </body>
 </html>

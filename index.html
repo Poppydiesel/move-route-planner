@@ -3,40 +3,23 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>MM — Minimal Map Sanity Check</title>
+  <title>MM — Minimal Map with Logo Watermark</title>
 
-  <!-- Leaflet (single source; do not include any other Leaflet versions) -->
+  <!-- Leaflet (single source) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <style>
     html, body, #map { height: 100%; margin: 0; }
+    /* ensure our pane/overlay stretch the map */
+    .leaflet-pane.mm-watermark, .mm-logo-tiler { position: absolute; inset: 0; }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  // Build diagonal logo pattern (fixed, above tiles)
-    (function(){
-      const img = new Image();
-      img.onload = function(){
-        const tileSize = 220, w = 200, h = 200;
-        const cnv = document.createElement('canvas'); cnv.width = tileSize; cnv.height = tileSize;
-        const ctx = cnv.getContext('2d'); ctx.clearRect(0,0,tileSize,tileSize);
-        ctx.save(); ctx.translate(tileSize/2, tileSize/2); ctx.rotate(-30 * Math.PI/180); ctx.globalAlpha = 0.25;
-        ctx.drawImage(img, -w/2, -h/2, w, h); ctx.restore();
-        document.getElementById('logoOverlay').style.backgroundImage = 'url(' + cnv.toDataURL('image/png') + ')';
-      };
-img.src = 'Move-Motorcycles-Blue.png';
-  })();
-
-    // Leaflet map
-    const map = L.map('map', { preferCanvas:true });
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
 
   <script>
-  // If any error happens, show it visibly
+  // Show any runtime JS errors visibly on the page
   window.addEventListener('error', e => {
     const box = document.createElement('div');
     box.textContent = 'JS error: ' + (e.error?.message || e.message);
@@ -44,10 +27,56 @@ img.src = 'Move-Motorcycles-Blue.png';
     document.body.appendChild(box);
   });
 
-  // Minimal Leaflet init
-  const map = L.map('map').setView([51.7520,-1.2577], 7);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+  // 1) Minimal Leaflet init
+  const map = L.map('map', { preferCanvas:true }).setView([51.7520, -1.2577], 7);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
   L.marker([51.7520,-1.2577]).addTo(map).bindPopup('Oxford').openPopup();
+
+  // 2) Create a pane that sits ABOVE tiles but BELOW markers
+  const mmPane = map.createPane('mm-watermark');     // class: leaflet-pane mm-watermark
+  mmPane.style.zIndex = 300;                         // tiles ~200, markers/overlay higher
+  mmPane.style.pointerEvents = 'none';
+
+  // 3) Create an overlay div inside that pane
+  const mmOverlay = L.DomUtil.create('div', 'mm-logo-tiler', mmPane);
+  mmOverlay.id = 'logoOverlay';
+  Object.assign(mmOverlay.style, {
+    backgroundRepeat: 'repeat',
+    backgroundSize: '220px 220px' // will be set again by JS below
+  });
+
+  // 4) Build diagonal logo pattern from your PNG (tiled canvas -> background-image)
+  (function(){
+    const img = new Image();
+    img.onload = function(){
+      const tileSize = 220;    // tile step
+      const w = 200, h = 200;  // logo draw size within tile
+      const cnv = document.createElement('canvas');
+      cnv.width = tileSize; cnv.height = tileSize;
+      const ctx = cnv.getContext('2d');
+
+      ctx.clearRect(0,0,tileSize,tileSize);
+      ctx.save();
+      ctx.translate(tileSize/2, tileSize/2);
+      ctx.rotate(-30 * Math.PI/180);   // diagonal
+      ctx.globalAlpha = 0.25;          // ~25% opacity
+      ctx.drawImage(img, -w/2, -h/2, w, h);
+      ctx.restore();
+
+      const dataURL = cnv.toDataURL('image/png');
+      const overlay = document.getElementById('logoOverlay');
+      overlay.style.backgroundImage = 'url(' + dataURL + ')';
+      overlay.style.backgroundRepeat = 'repeat';
+      overlay.style.backgroundSize = tileSize + 'px ' + tileSize + 'px';
+    };
+
+    // IMPORTANT: file must be exactly this name in the same folder as index.html
+    img.src = 'Move-Motorcycles-Blue.png';
+    // If your repo uses spaces instead: 'Move%20Motorcycles%20Blue.png'
+    // If it’s inside /images/:       'images/Move-Motorcycles-Blue.png'
+  })();
   </script>
 </body>
 </html>
